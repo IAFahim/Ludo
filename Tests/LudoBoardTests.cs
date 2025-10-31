@@ -1,8 +1,5 @@
 using NUnit.Framework;
 using Ludo;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 [TestFixture]
 public class LudoBoardTests
@@ -10,15 +7,7 @@ public class LudoBoardTests
     // Helper method to manually set token positions for specific test scenarios.
     private void SetTokenPosition(ref LudoBoard board, int tokenIndex, byte position)
     {
-        var positions = board.TokenPositions;
-        positions[tokenIndex] = position;
-        // In C# 12 we could use ref reassignment, but this is more compatible.
-        // This is a bit of a workaround because LudoBoard is a struct.
-        // A better approach might be a method within LudoBoard for testing.
-        // For this example, we'll create a new board with the modified state.
-        var newBoard = new LudoBoard(board.PlayerCount);
-        newBoard.TokenPositions = positions;
-        board = newBoard;
+        board.tokenPositions[tokenIndex] = position;
     }
 
     #region Constructor Tests
@@ -31,9 +20,9 @@ public class LudoBoardTests
     {
         var board = new LudoBoard(playerCount);
 
-        Assert.That(board.PlayerCount, Is.EqualTo(playerCount));
-        Assert.That(board.TokenPositions.Length, Is.EqualTo(playerCount * 4));
-        Assert.That(board.TokenPositions.All(p => p == 0), Is.True, "All tokens should start at base (position 0).");
+        Assert.That(board.playerCount, Is.EqualTo(playerCount));
+        Assert.That(board.tokenPositions.Length, Is.EqualTo(playerCount * 4));
+        Assert.That(board.tokenPositions.All(p => p == 0), Is.True, "All tokens should start at base (position 0).");
     }
 
     #endregion
@@ -110,21 +99,24 @@ public class LudoBoardTests
 
     #endregion
 
-    #region Game Logic Tests
+    #region Game Logic Tests - HasWon
 
     [Test]
-    public void HasWon_WhenAllPlayerTokensAreHome_ReturnsTrue()
+    public void HasWon_WhenAllPlayerTokensAreHome_ReturnsOkTrue()
     {
         var board = new LudoBoard(2);
         for (int i = 0; i < 4; i++)
         {
             SetTokenPosition(ref board, i, 59);
         }
-        Assert.That(board.HasWon(0), Is.True);
+        
+        var result = board.HasWon(0);
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.True);
     }
 
     [Test]
-    public void HasWon_WhenNotAllTokensAreHome_ReturnsFalse()
+    public void HasWon_WhenNotAllTokensAreHome_ReturnsOkFalse()
     {
         var board = new LudoBoard(2);
         for (int i = 0; i < 3; i++)
@@ -132,58 +124,139 @@ public class LudoBoardTests
             SetTokenPosition(ref board, i, 59);
         }
         SetTokenPosition(ref board, 3, 58);
-        Assert.That(board.HasWon(0), Is.False);
-    }
-
-    [Test]
-    public void GetOutOfBase_WithTokenAtBase_MovesTokenToStart()
-    {
-        var board = new LudoBoard(2);
-        board.GetOutOfBase(0);
-        Assert.That(board.TokenPositions[0], Is.EqualTo(1));
-    }
-
-    [Test]
-    public void GetOutOfBase_WhenLandingOnOpponent_CapturesOpponent()
-    {
-        var board = new LudoBoard(2);
-        // Player 1 (token 4) is at their start, which is absolute position 27.
-        // Player 0's start is absolute position 1.
-        // Let's place Player 1's token at Player 0's start.
-        SetTokenPosition(ref board, 4, 27); // Player 1's token at their relative pos 27 (abs 52)
-        SetTokenPosition(ref board, 5, 1);  // Player 1's token at their relative pos 1 (abs 27)
         
-        // Now, let's place Player 0's token at a position that will land on Player 1's token
-        // For this test, we need to adjust the scenario.
-        // Player 1, token 4, at relative position 40. Absolute position is (40-1+26)%52+1 = 13.
-        // Player 0, token 0, gets out of base. Lands on relative position 1. Absolute position is 1.
-        // Let's place Player 1's token on Player 0's start tile.
-        // Player 1's start is abs 27. To get to abs 1, they need to move 27 tiles. So relative pos is 27.
-        SetTokenPosition(ref board, 4, 27);
-
-        // Player 0 (token 0) gets out of base.
-        board.GetOutOfBase(0);
-
-        Assert.That(board.TokenPositions[0], Is.EqualTo(1)); // Player 0 moved
-        Assert.That(board.TokenPositions[4], Is.EqualTo(0)); // Player 1 captured
+        var result = board.HasWon(0);
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.False);
     }
 
     [Test]
-    public void MoveToken_SimpleMoveOnMainTrack()
+    public void HasWon_WithInvalidPlayerIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.HasWon(-1);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidPlayerIndex));
+        
+        var result2 = board.HasWon(2);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidPlayerIndex));
+    }
+
+    #endregion
+
+    #region Game Logic Tests - GetOutOfBase
+
+    [Test]
+    public void GetOutOfBase_WithTokenAtBase_ReturnsOkAndMovesTokenToStart()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetOutOfBase(0);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void GetOutOfBase_WithInvalidTokenIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetOutOfBase(-1);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidTokenIndex));
+        
+        var result2 = board.GetOutOfBase(8);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidTokenIndex));
+    }
+
+    [Test]
+    public void GetOutOfBase_WhenTokenNotAtBase_ReturnsError()
     {
         var board = new LudoBoard(2);
         SetTokenPosition(ref board, 0, 10);
-        board.MoveToken(0, 5);
-        Assert.That(board.TokenPositions[0], Is.EqualTo(15));
+        
+        var result = board.GetOutOfBase(0);
+        
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.TokenNotAtBase));
     }
 
     [Test]
-    public void MoveToken_WrapsAroundBoard()
+    public void GetOutOfBase_WhenStartIsBlocked_ReturnsError()
     {
-        var board = new LudoBoard(4);
-        SetTokenPosition(ref board, 0, 51+6);
-        board.MoveToken(0, 4);
-        Assert.That(board.TokenPositions[0], Is.EqualTo(3)); // 51 -> 52 -> 1 -> 2 -> 3
+        var board = new LudoBoard(2);
+        // Player 1's tokens blocking player 0's start (absolute position 1)
+        // Player 1's offset is 26. To be at abs 1, relative = (1-1-26+52)%52+1 = 27
+        SetTokenPosition(ref board, 4, 27);
+        SetTokenPosition(ref board, 5, 27);
+        
+        var result = board.GetOutOfBase(0);
+        
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.PathBlocked));
+        Assert.That(board.tokenPositions[0], Is.EqualTo(0), "Token should remain at base");
+    }
+
+    #endregion
+
+    #region Game Logic Tests - MoveToken
+
+    [Test]
+    public void MoveToken_SimpleMoveOnMainTrack_ReturnsOkAndMoves()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 10);
+        
+        var result = board.MoveToken(0, 5);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.EqualTo(15));
+        Assert.That(board.tokenPositions[0], Is.EqualTo(15));
+    }
+
+    [Test]
+    public void MoveToken_WithInvalidTokenIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.MoveToken(-1, 5);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidTokenIndex));
+        
+        var result2 = board.MoveToken(8, 5);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidTokenIndex));
+    }
+
+    [Test]
+    public void MoveToken_WithInvalidSteps_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 10);
+        
+        var result = board.MoveToken(0, 0);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidDiceRoll));
+        
+        var result2 = board.MoveToken(0, -1);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidDiceRoll));
+    }
+
+    [Test]
+    public void MoveToken_WhenTokenAlreadyHome_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 59);
+        
+        var result = board.MoveToken(0, 3);
+        
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.TokenAlreadyHome));
     }
 
     [Test]
@@ -191,21 +264,11 @@ public class LudoBoardTests
     {
         var board = new LudoBoard(4);
         SetTokenPosition(ref board, 0, 51);
-        board.MoveToken(0, 4); // Passes home entry tile 52
-        // 1 step to 52, 3 steps into home stretch
-        Assert.That(board.TokenPositions[0], Is.EqualTo(53 + 3 - 1)); // 55
-    }
-
-    [Test]
-    public void MoveToken_EntersHomeStretchForPlayer1_4Players()
-    {
-        var board = new LudoBoard(4);
-        // Player 1's home entry is at absolute tile 13.
-        // To be at relative position 12, their absolute position is (12-1+13)%52+1 = 25
-        SetTokenPosition(ref board, 4, 12);
-        board.MoveToken(4, 3); // Passes home entry tile 13
-        // 1 step to relative 13, 2 steps into home stretch
-        Assert.That(board.TokenPositions[4], Is.EqualTo(53 + 2 - 1)); // 54
+        
+        var result = board.MoveToken(0, 4); // Passes home entry tile 52
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(55)); // 53 + 3 - 1
     }
 
     [Test]
@@ -213,17 +276,36 @@ public class LudoBoardTests
     {
         var board = new LudoBoard(2);
         SetTokenPosition(ref board, 0, 54);
-        board.MoveToken(0, 3);
-        Assert.That(board.TokenPositions[0], Is.EqualTo(57));
+        
+        var result = board.MoveToken(0, 3);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(57));
     }
 
     [Test]
-    public void MoveToken_OvershootsHome_DoesNotMove()
+    public void MoveToken_OvershootsHome_ReturnsError()
     {
         var board = new LudoBoard(2);
         SetTokenPosition(ref board, 0, 57);
-        board.MoveToken(0, 4); // Would end up at 61, which is > 59
-        Assert.That(board.TokenPositions[0], Is.EqualTo(57));
+        
+        var result = board.MoveToken(0, 4); // Would end up at 61, which is > 59
+        
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.WouldOvershootHome));
+        Assert.That(board.tokenPositions[0], Is.EqualTo(57), "Token should not move");
+    }
+
+    [Test]
+    public void MoveToken_ExactlyReachesHome_ReturnsOk()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 57);
+        
+        var result = board.MoveToken(0, 2); // Exactly reaches 59
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(59));
     }
 
     [Test]
@@ -235,10 +317,11 @@ public class LudoBoardTests
         // Player 1 offset is 26. Relative pos = (15 - 1 - 26 + 52) % 52 + 1 = 41
         SetTokenPosition(ref board, 4, 41); // Player 1, token 4
 
-        board.MoveToken(0, 5); // Player 0 moves to 15, captures Player 1's token
+        var result = board.MoveToken(0, 5); // Player 0 moves to 15, captures Player 1's token
 
-        Assert.That(board.TokenPositions[0], Is.EqualTo(15));
-        Assert.That(board.TokenPositions[4], Is.EqualTo(0)); // Captured
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(15));
+        Assert.That(board.tokenPositions[4], Is.EqualTo(0), "Opponent should be captured");
     }
 
     [Test]
@@ -250,10 +333,51 @@ public class LudoBoardTests
         // Relative pos = (14 - 1 - 26 + 52) % 52 + 1 = 40
         SetTokenPosition(ref board, 4, 40); // Player 1, token 4
 
-        board.MoveToken(0, 4); // Player 0 moves to safe tile 14
+        var result = board.MoveToken(0, 4); // Player 0 moves to safe tile 14
 
-        Assert.That(board.TokenPositions[0], Is.EqualTo(14));
-        Assert.That(board.TokenPositions[4], Is.EqualTo(40)); // Not captured
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(14));
+        Assert.That(board.tokenPositions[4], Is.EqualTo(40), "Should not capture on safe tile");
+    }
+
+    [Test]
+    public void MoveToken_PathBlocked_ReturnsError()
+    {
+        var board = new LudoBoard(4);
+        SetTokenPosition(ref board, 0, 10);
+        // Player 1 has two tokens blocking absolute position 12
+        // Player 1 offset is 13. To be at abs 12, relative pos is (12-1-13+52)%52+1 = 51
+        SetTokenPosition(ref board, 4, 51);
+        SetTokenPosition(ref board, 5, 51);
+
+        var result = board.MoveToken(0, 3); // Try to move to pos 13, passing blocked 12
+
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.PathBlocked));
+        Assert.That(board.tokenPositions[0], Is.EqualTo(10), "Token should not move");
+    }
+
+    [Test]
+    public void MoveToken_FromBase_WithRoll6_ReturnsOk()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.MoveToken(0, 6);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void MoveToken_FromBase_WithoutRoll6_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.MoveToken(0, 5);
+        
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.TokenNotMovable));
+        Assert.That(board.tokenPositions[0], Is.EqualTo(0), "Token should remain at base");
     }
 
     #endregion
@@ -264,7 +388,11 @@ public class LudoBoardTests
     public void GetMovableTokens_Roll6_CanMoveFromBase()
     {
         var board = new LudoBoard(2);
-        var movable = board.GetMovableTokens(0, 6);
+        
+        var result = board.GetMovableTokens(0, 6);
+        
+        Assert.That(result.IsOk, Is.True);
+        var movable = result.Unwrap();
         Assert.That(movable, Contains.Item(0));
         Assert.That(movable, Contains.Item(1));
         Assert.That(movable, Contains.Item(2));
@@ -275,8 +403,11 @@ public class LudoBoardTests
     public void GetMovableTokens_RollNot6_CannotMoveFromBase()
     {
         var board = new LudoBoard(2);
-        var movable = board.GetMovableTokens(0, 5);
-        Assert.That(movable, Is.Empty);
+        
+        var result = board.GetMovableTokens(0, 5);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.Empty);
     }
 
     [Test]
@@ -284,24 +415,26 @@ public class LudoBoardTests
     {
         var board = new LudoBoard(2);
         SetTokenPosition(ref board, 0, 59); // Token 0 is home
-        var movable = board.GetMovableTokens(0, 3);
-        Assert.That(movable, Does.Not.Contain(0));
+        
+        var result = board.GetMovableTokens(0, 3);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Does.Not.Contain(0));
     }
 
     [Test]
     public void GetMovableTokens_PathIsBlocked_TokenIsNotMovable()
     {
         var board = new LudoBoard(4);
-        // Player 0 has a token at relative position 10
         SetTokenPosition(ref board, 0, 10);
         // Player 1 has two tokens blocking absolute position 12
-        // Player 1 offset is 13. To be at abs 12, relative pos is (12-1-13+52)%52+1 = 51
         SetTokenPosition(ref board, 4, 51);
         SetTokenPosition(ref board, 5, 51);
 
-        var movable = board.GetMovableTokens(0, 3); // Try to move 3 steps to pos 13, passing blocked 12
+        var result = board.GetMovableTokens(0, 3);
 
-        Assert.That(movable, Does.Not.Contain(0));
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Does.Not.Contain(0));
     }
     
     [Test]
@@ -309,8 +442,224 @@ public class LudoBoardTests
     {
         var board = new LudoBoard(2);
         SetTokenPosition(ref board, 0, 58);
-        var movable = board.GetMovableTokens(0, 3); // Would overshoot home
-        Assert.That(movable, Is.Empty);
+        
+        var result = board.GetMovableTokens(0, 3); // Would overshoot home
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.Empty);
+    }
+
+    [Test]
+    public void GetMovableTokens_WithInvalidPlayerIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetMovableTokens(-1, 6);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidPlayerIndex));
+        
+        var result2 = board.GetMovableTokens(2, 6);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidPlayerIndex));
+    }
+
+    [Test]
+    public void GetMovableTokens_WithInvalidDiceRoll_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetMovableTokens(0, 0);
+        Assert.That(result.IsErr, Is.True);
+        Assert.That(result.UnwrapErr(), Is.EqualTo(LudoError.InvalidDiceRoll));
+        
+        var result2 = board.GetMovableTokens(0, 7);
+        Assert.That(result2.IsErr, Is.True);
+        Assert.That(result2.UnwrapErr(), Is.EqualTo(LudoError.InvalidDiceRoll));
+    }
+
+    [Test]
+    public void GetMovableTokens_MixedTokenStates_ReturnsOnlyMovable()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 0);  // At base
+        SetTokenPosition(ref board, 1, 10); // On track
+        SetTokenPosition(ref board, 2, 59); // Home
+        SetTokenPosition(ref board, 3, 55); // Home stretch
+        
+        var result = board.GetMovableTokens(0, 3);
+        
+        Assert.That(result.IsOk, Is.True);
+        var movable = result.Unwrap();
+        Assert.That(movable, Does.Not.Contain(0)); // Base without 6
+        Assert.That(movable, Contains.Item(1));     // Can move on track
+        Assert.That(movable, Does.Not.Contain(2)); // Already home
+        Assert.That(movable, Contains.Item(3));     // Can move in home stretch
+    }
+
+    #endregion
+
+    #region Edge Cases and Boundary Tests
+
+    [Test]
+    public void MoveToken_WrapsAroundTrackCorrectly()
+    {
+        var board = new LudoBoard(4);
+        // Player 1's token near their home entry
+        SetTokenPosition(ref board, 4, 10);
+        
+        var result = board.MoveToken(4, 5);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[4], Is.EqualTo(15));
+    }
+
+    [Test]
+    public void MoveToken_MultipleCaptures_OnSameTile()
+    {
+        var board = new LudoBoard(4);
+        SetTokenPosition(ref board, 0, 10);
+        // Multiple opponent tokens on same tile
+        SetTokenPosition(ref board, 4, 41); // Player 1 at abs 15
+        SetTokenPosition(ref board, 8, 28); // Player 2 at abs 15 (offset 39, (15-1-39+52)%52+1=28)
+        
+        var result = board.MoveToken(0, 5);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(15));
+    }
+
+    [Test]
+    public void MoveToken_DoesNotCaptureOwnTokens()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 10);
+        SetTokenPosition(ref board, 1, 15); // Own token at target
+        
+        var result = board.MoveToken(0, 5);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(15));
+        Assert.That(board.tokenPositions[1], Is.EqualTo(15), "Own token should not be captured");
+    }
+
+    [Test]
+    public void MoveToken_BlockedByOwnTokens_DoesNotPreventMovement()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 10);
+        SetTokenPosition(ref board, 1, 12); // Own token
+        SetTokenPosition(ref board, 2, 12); // Own token - 2 tokens but same player
+        
+        var result = board.MoveToken(0, 3);
+        
+        // Own tokens don't block - only opponent tokens do
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(13));
+    }
+
+    [Test]
+    public void GetTokenPosition_ValidIndex_ReturnsOk()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 15);
+        
+        var result = board.GetTokenPosition(0);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.EqualTo(15));
+    }
+
+    [Test]
+    public void GetTokenPosition_InvalidIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetTokenPosition(-1);
+        Assert.That(result.IsErr, Is.True);
+        
+        var result2 = board.GetTokenPosition(8);
+        Assert.That(result2.IsErr, Is.True);
+    }
+
+    [Test]
+    public void SetTokenPosition_ValidIndex_ReturnsOk()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.SetTokenPosition(0, 25);
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(board.tokenPositions[0], Is.EqualTo(25));
+    }
+
+    [Test]
+    public void SetTokenPosition_InvalidIndex_ReturnsError()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.SetTokenPosition(-1, 25);
+        Assert.That(result.IsErr, Is.True);
+        
+        var result2 = board.SetTokenPosition(8, 25);
+        Assert.That(result2.IsErr, Is.True);
+    }
+
+    #endregion
+
+    #region Result Type Tests
+
+    [Test]
+    public void Result_Map_TransformsOkValue()
+    {
+        var board = new LudoBoard(2);
+        SetTokenPosition(ref board, 0, 10);
+        
+        var result = board.MoveToken(0, 5)
+            .Map(pos => $"Moved to position {pos}");
+        
+        Assert.That(result.IsOk, Is.True);
+        Assert.That(result.Unwrap(), Is.EqualTo("Moved to position 15"));
+    }
+
+    [Test]
+    public void Result_AndThen_ChainsOperations()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.GetMovableTokens(0, 6)
+            .AndThen(tokens => tokens.Count > 0 
+                ? Result<int, LudoError>.Ok(tokens[0])
+                : Result<int, LudoError>.Err(LudoError.TokenNotMovable))
+            .AndThen(tokenIndex => board.MoveToken(tokenIndex, 6));
+        
+        Assert.That(result.IsOk, Is.True);
+    }
+
+    [Test]
+    public void Result_UnwrapOr_ProvidesDefault()
+    {
+        var board = new LudoBoard(2);
+        
+        var position = board.MoveToken(0, 5).UnwrapOr(0);
+        
+        Assert.That(position, Is.EqualTo(0)); // Error case, returns default
+    }
+
+    [Test]
+    public void Result_TryGetValue_ProvidesErrorInfo()
+    {
+        var board = new LudoBoard(2);
+        
+        var result = board.MoveToken(0, 5);
+        
+        if (result.TryGetValue(out var value, out var error))
+        {
+            Assert.Fail("Should have failed");
+        }
+        else
+        {
+            Assert.That(error, Is.EqualTo(LudoError.TokenNotMovable));
+        }
     }
 
     #endregion

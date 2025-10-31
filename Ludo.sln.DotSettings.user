@@ -1,5 +1,6 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003ATestCaseAttribute_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FLibrary_003FApplication_0020Support_003FJetBrains_003FRider2025_002E2_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F66eca7339e514aca875e7e128c50570880600_003Fe8_003Fdcad6932_003FTestCaseAttribute_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
+	<s:String x:Key="/Default/dotCover/Editor/HighlightingSourceSnapshotLocation/@EntryValue">/Users/betopia/Library/Caches/JetBrains/Rider2025.2/resharper-host/temp/Rider/vAny/CoverageData/_Ludo.-842325805/Snapshot/snapshot.utdcvr</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=30826a67_002Dbe41_002D46c0_002D96b8_002D000c9fbf80e7/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="LudoBoardTests #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;NUnit3x::10D9BE96-3147-4304-A959-CDDE7BBA3E80::net9.0::LudoBoardTests&lt;/TestId&gt;
@@ -10,8 +11,17 @@
     &lt;TestId&gt;NUnit3x::10D9BE96-3147-4304-A959-CDDE7BBA3E80::net9.0::LudoTests.LudoBoardTests&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=95b03bd3_002Ddf27_002D4045_002Da284_002D0da5c46bc84d/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="All tests from LudoBoardTests.cs" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;ProjectFile&gt;10D9BE96-3147-4304-A959-CDDE7BBA3E80/d:Tests/f:LudoBoardTests.cs&lt;/ProjectFile&gt;
+&lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=a986d597_002D356e_002D4742_002D8f65_002Dea7175661614/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="All tests from LudoBoardTests.cs #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;ProjectFile&gt;10D9BE96-3147-4304-A959-CDDE7BBA3E80/d:Tests/f:LudoBoardTests.cs&lt;/ProjectFile&gt;
+&lt;/SessionState&gt;</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=c32abb10_002D77e7_002D42cd_002Db5db_002D63fb2f847544/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="LudoBoardTests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;NUnit3x::10D9BE96-3147-4304-A959-CDDE7BBA3E80::net9.0::LudoTests.LudoBoardTests&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=d160511a_002D0d4e_002D46ec_002D83b6_002D82860eb89d71/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="MoveToken_EntersHomeStretchForPlayer1_4Players" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;ProjectFile&gt;10D9BE96-3147-4304-A959-CDDE7BBA3E80/d:Tests/f:LudoBoardTests.cs&lt;/ProjectFile&gt;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>
