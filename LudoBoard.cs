@@ -1,67 +1,230 @@
-using Ludo;
+using System;
 
 namespace Ludo
 {
-    // Error types for Ludo game
-    public enum LudoError
-    {
-        InvalidTokenIndex,
-        TokenNotMovable,
-        InvalidDiceRoll,
-        TokenAlreadyHome,
-        TokenNotAtBase,
-        PathBlocked,
-        WouldOvershootHome,
-        InvalidPlayerIndex
-    }
-
+    /// <summary>
+    /// Compact, testable Ludo board rules engine with centralized validation.
+    /// Relative positions:
+    ///   0   = Base
+    ///   1..51 = Main track (player-relative)
+    ///   52..56 = Home stretch (5 tiles)
+    ///   57  = Home (win for that token)
+    /// Absolute loop (capturing / safe squares): 52 tiles.
+    /// </summary>
+    [Serializable]
     public struct LudoBoard
     {
+        // Relative positions (player-centric)
         private const byte BasePosition = 0;
         private const byte StartPosition = 1;
-        private const byte TotalMainTrackTiles = 52;
-        private const byte HomeStretchStartPosition = 53;
-        public const byte StepsToHome = 6;
-        private const byte HomePosition = HomeStretchStartPosition + StepsToHome;
+        private const byte RelativeMainMax = 51;
+        private const byte HomeStretchStartPosition = 52;
+        public const byte StepsToHome = 5;
+        private const byte HomePosition = HomeStretchStartPosition + StepsToHome; // 57
+
+        // Absolute loop (global)
+        private const byte AbsoluteTrackLength = 52;
         private const byte ExitFromBaseAtRoll = 6;
         private const byte TokensPerPlayer = 4;
-        private const byte PlayerTrackOffset = TotalMainTrackTiles / 4;
+        private const byte PlayerTrackOffset = AbsoluteTrackLength / 4; // 13
 
-        public static readonly byte[] SafeAbsoluteTiles = [1, 14, 27, 40];
+        // Absolute safe tiles (global)
+        public static readonly byte[] SafeAbsoluteTiles = new byte[] { 1, 14, 27, 40 };
 
         public byte[] tokenPositions;
-        public readonly int playerCount;
+        public int PlayerCount => tokenPositions.Length / 4;
 
-        public Result<byte, LudoError> GetTokenPosition(int tokenIndex)
+        // =========================
+        // Centralized Validation
+        // =========================
+
+        private bool TryValidateTokenIndex(int tokenIndex, out LudoError error)
         {
-            if (!IsValidTokenIndex(tokenIndex))
-                return Result<byte, LudoError>.Err(LudoError.InvalidTokenIndex);
-
-            return Result<byte, LudoError>.Ok(tokenPositions[tokenIndex]);
+            if (tokenIndex < 0 || tokenIndex >= tokenPositions.Length)
+            {
+                error = LudoError.InvalidTokenIndex;
+                return false;
+            }
+            error = default;
+            return true;
         }
 
-        public Result<bool, LudoError> SetTokenPosition(int tokenIndex, byte position)
+        private bool TryValidatePlayerIndex(int playerIndex, out LudoError error)
         {
-            if (!IsValidTokenIndex(tokenIndex))
-                return Result<bool, LudoError>.Err(LudoError.InvalidTokenIndex);
+            if (playerIndex < 0 || playerIndex >= PlayerCount)
+            {
+                error = LudoError.InvalidPlayerIndex;
+                return false;
+            }
+            error = default;
+            return true;
+        }
+
+        private bool TryValidateDiceRoll(int diceRoll, out LudoError error)
+        {
+            if (diceRoll < 1 || diceRoll > 6)
+            {
+                error = LudoError.InvalidDiceRoll;
+                return false;
+            }
+            error = default;
+            return true;
+        }
+
+        private bool TryValidatePositionValue(byte position, out LudoError error)
+        {
+            if (position == BasePosition ||
+                position >= StartPosition && position <= RelativeMainMax ||
+                position >= HomeStretchStartPosition && position < HomePosition ||
+                position == HomePosition)
+            {
+                error = default;
+                return true;
+            }
+            error = LudoError.InvalidPositionValue;
+            return false;
+        }
+
+        // =========================
+        // Constructor
+        // =========================
+
+        public LudoBoard(int playerCount)
+        {
+            tokenPositions = new byte[Math.Max(0, playerCount) * TokensPerPlayer];
+        }
+
+        // =========================
+        // Public API - Token Operations
+        // =========================
+
+        public bool TryGetTokenPosition(int tokenIndex, out byte position, out LudoError error)
+        {
+            position = 0;
+            if (!TryValidateTokenIndex(tokenIndex, out error)) return false;
+
+            position = tokenPositions[tokenIndex];
+            return true;
+        }
+
+        public bool TrySetTokenPosition(int tokenIndex, byte position, out LudoError error)
+        {
+            if (!TryValidateTokenIndex(tokenIndex, out error)) return false;
+            if (!TryValidatePositionValue(position, out error)) return false;
 
             tokenPositions[tokenIndex] = position;
-            return Result<bool, LudoError>.Ok(true);
+            return true;
         }
 
-        public LudoBoard(int numberOfPlayers)
+        public bool TryMoveToken(int tokenIndex, int steps, out byte newPosition, out sbyte evictedTokenIndex, out LudoError error)
         {
-            playerCount = numberOfPlayers;
-            tokenPositions = new byte[playerCount * TokensPerPlayer];
+            newPosition = 0;
+            evictedTokenIndex = -1;
+
+            if (!TryValidateTokenIndex(tokenIndex, out error)) return false;
+            if (!TryValidateDiceRoll(steps, out error)) return false;
+
+            if (IsHome(tokenIndex))
+            {
+                error = LudoError.TokenAlreadyHome;
+                return false;
+            }
+
+            if (!TryComputeNewPosition(tokenIndex, steps, out newPosition, out error))
+            {
+                return false;
+            }
+
+            // Execute move
+            tokenPositions[tokenIndex] = newPosition;
+
+            // Handle capture logic
+            if (IsOnMainTrack(tokenIndex) && !IsOnSafeTile(tokenIndex))
+            {
+                evictedTokenIndex = TryCaptureSingleOpponent(tokenIndex);
+            }
+
+            return true;
         }
+
+        public bool TryGetOutOfBase(int tokenIndex, int diceRoll, out LudoError error)
+        {
+            if (!TryValidateTokenIndex(tokenIndex, out error)) return false;
+            if (!TryValidateDiceRoll(diceRoll, out error)) return false;
+
+            if (diceRoll != ExitFromBaseAtRoll)
+            {
+                error = LudoError.InvalidDiceRoll;
+                return false;
+            }
+
+            if (!IsAtBase(tokenIndex))
+            {
+                error = LudoError.TokenNotAtBase;
+                return false;
+            }
+
+            tokenPositions[tokenIndex] = StartPosition;
+            return true;
+        }
+
+        // =========================
+        // Public API - Game State Queries
+        // =========================
+
+        public bool TryGetMovableTokens(int playerIndex, int diceRoll, out sbyte movableTokens, out LudoError error)
+        {
+            movableTokens = 0;
+
+            if (!TryValidatePlayerIndex(playerIndex, out error)) return false;
+            if (!TryValidateDiceRoll(diceRoll, out error)) return false;
+
+            int playerTokenStartIndex = playerIndex * TokensPerPlayer;
+            for (int i = 0; i < TokensPerPlayer; i++)
+            {
+                int tokenIndex = playerTokenStartIndex + i;
+                if (TryComputeNewPosition(tokenIndex, diceRoll, out _, out _))
+                {
+                    movableTokens |= (sbyte)(1 << i);
+                }
+            }
+
+            return true;
+        }
+
+        public bool TryHasWon(int playerIndex, out bool hasWon, out LudoError error)
+        {
+            hasWon = false;
+
+            if (!TryValidatePlayerIndex(playerIndex, out error)) return false;
+
+            int start = playerIndex * TokensPerPlayer;
+            for (int i = 0; i < TokensPerPlayer; i++)
+            {
+                if (!IsHome(start + i))
+                {
+                    return true; // hasWon = false already set
+                }
+            }
+
+            hasWon = true;
+            return true;
+        }
+
 
         public bool IsAtBase(int tokenIndex) => tokenPositions[tokenIndex] == BasePosition;
 
-        public bool IsOnMainTrack(int tokenIndex) => tokenPositions[tokenIndex] >= StartPosition &&
-                                                     tokenPositions[tokenIndex] <= TotalMainTrackTiles;
+        public bool IsOnMainTrack(int tokenIndex)
+        {
+            byte p = tokenPositions[tokenIndex];
+            return p >= StartPosition && p <= RelativeMainMax;
+        }
 
-        public bool IsOnHomeStretch(int tokenIndex) => tokenPositions[tokenIndex] >= HomeStretchStartPosition &&
-                                                       tokenPositions[tokenIndex] < HomePosition;
+        public bool IsOnHomeStretch(int tokenIndex)
+        {
+            byte p = tokenPositions[tokenIndex];
+            return p >= HomeStretchStartPosition && p < HomePosition;
+        }
 
         public bool IsHome(int tokenIndex) => tokenPositions[tokenIndex] == HomePosition;
 
@@ -70,249 +233,150 @@ namespace Ludo
             if (IsOnHomeStretch(tokenIndex)) return true;
             if (!IsOnMainTrack(tokenIndex)) return false;
 
-            var absolutePosition = GetAbsolutePosition(tokenIndex);
-            return SafeAbsoluteTiles.Contains((byte)absolutePosition);
+            int absolutePosition = GetAbsolutePosition(tokenIndex);
+            return IsSafeAbsoluteTile((byte)absolutePosition);
         }
 
-        public Result<bool, LudoError> HasWon(int playerIndex)
+        // =========================
+        // Private Helpers
+        // =========================
+
+        private bool TryComputeNewPosition(int tokenIndex, int steps, out byte newPosition, out LudoError error)
         {
-            if (playerIndex < 0 || playerIndex >= playerCount)
-                return Result<bool, LudoError>.Err(LudoError.InvalidPlayerIndex);
-
-            var playerTokenStartIndex = playerIndex * TokensPerPlayer;
-            for (int i = 0; i < TokensPerPlayer; i++)
-            {
-                if (!IsHome(playerTokenStartIndex + i))
-                    return Result<bool, LudoError>.Ok(false);
-            }
-
-            return Result<bool, LudoError>.Ok(true);
-        }
-
-        // Keep original for backwards compatibility with tests
-        public bool HasWon_Legacy(int playerIndex)
-        {
-            var result = HasWon(playerIndex);
-            return result.UnwrapOr(false);
-        }
-
-        public Result<List<int>, LudoError> GetMovableTokens(int playerIndex, int diceRoll)
-        {
-            if (playerIndex < 0 || playerIndex >= playerCount)
-                return Result<List<int>, LudoError>.Err(LudoError.InvalidPlayerIndex);
-
-            if (diceRoll < 1 || diceRoll > 6)
-                return Result<List<int>, LudoError>.Err(LudoError.InvalidDiceRoll);
-
-            var movableTokens = new List<int>();
-            var playerTokenStartIndex = playerIndex * TokensPerPlayer;
-
-            for (int i = 0; i < TokensPerPlayer; i++)
-            {
-                int tokenIndex = playerTokenStartIndex + i;
-                if (CanMoveToken(tokenIndex, diceRoll))
-                    movableTokens.Add(tokenIndex);
-            }
-
-            return Result<List<int>, LudoError>.Ok(movableTokens);
-        }
-
-        public Result<bool, LudoError> GetOutOfBase(int tokenIndex)
-        {
-            if (!IsValidTokenIndex(tokenIndex))
-                return Result<bool, LudoError>.Err(LudoError.InvalidTokenIndex);
-
-            if (!IsAtBase(tokenIndex))
-                return Result<bool, LudoError>.Err(LudoError.TokenNotAtBase);
-
-            int playerIndex = tokenIndex / TokensPerPlayer;
-            int startAbsolute = ToAbsoluteMainTrack(StartPosition, playerIndex);
-
-            if (IsTileBlocked(startAbsolute, playerIndex))
-                return Result<bool, LudoError>.Err(LudoError.PathBlocked);
-
-            tokenPositions[tokenIndex] = StartPosition;
-            return Result<bool, LudoError>.Ok(true);
-        }
-
-        public Result<byte, LudoError> MoveToken(int tokenIndex, int steps)
-        {
-            if (!IsValidTokenIndex(tokenIndex))
-                return Result<byte, LudoError>.Err(LudoError.InvalidTokenIndex);
-
-            if (steps <= 0)
-                return Result<byte, LudoError>.Err(LudoError.InvalidDiceRoll);
-
-            if (IsHome(tokenIndex))
-                return Result<byte, LudoError>.Err(LudoError.TokenAlreadyHome);
-
-            var newPosResult = TryGetNewPosition(tokenIndex, steps);
-            if (newPosResult.IsErr)
-                return newPosResult;
-
-            byte newPosition = newPosResult.Unwrap();
-            tokenPositions[tokenIndex] = newPosition;
-
-            if (IsOnMainTrack(tokenIndex) && !IsOnSafeTile(tokenIndex))
-            {
-                CaptureTokensAt(tokenIndex);
-            }
-
-            return Result<byte, LudoError>.Ok(newPosition);
-        }
-
-        private Result<byte, LudoError> TryGetNewPosition(int tokenIndex, int steps)
-        {
+            newPosition = 0;
             byte currentPosition = tokenPositions[tokenIndex];
 
             if (IsHome(tokenIndex))
-                return Result<byte, LudoError>.Err(LudoError.TokenAlreadyHome);
+            {
+                error = LudoError.TokenAlreadyHome;
+                return false;
+            }
 
-            int playerIndex = tokenIndex / TokensPerPlayer;
-
+            // Token at base
             if (IsAtBase(tokenIndex))
             {
                 if (steps != ExitFromBaseAtRoll)
-                    return Result<byte, LudoError>.Err(LudoError.TokenNotMovable);
-
-                int startAbs = ToAbsoluteMainTrack(StartPosition, playerIndex);
-                if (IsTileBlocked(startAbs, playerIndex))
-                    return Result<byte, LudoError>.Err(LudoError.PathBlocked);
-
-                return Result<byte, LudoError>.Ok(StartPosition);
+                {
+                    error = LudoError.TokenNotMovable;
+                    return false;
+                }
+                newPosition = StartPosition;
+                error = default;
+                return true;
             }
 
+            // Token on main track
             if (IsOnMainTrack(tokenIndex))
             {
                 int relativeTarget = currentPosition + steps;
 
-                int stepsOnTrack = Math.Min(steps, TotalMainTrackTiles - currentPosition);
-                for (int i = 1; i <= stepsOnTrack; i++)
+                if (relativeTarget <= RelativeMainMax)
                 {
-                    byte nextRelative = (byte)(currentPosition + i);
-                    int nextAbsolute = ToAbsoluteMainTrack(nextRelative, playerIndex);
-                    if (IsTileBlocked(nextAbsolute, playerIndex))
-                        return Result<byte, LudoError>.Err(LudoError.PathBlocked);
+                    newPosition = (byte)relativeTarget;
+                    error = default;
+                    return true;
                 }
 
-                if (relativeTarget <= TotalMainTrackTiles)
-                {
-                    return Result<byte, LudoError>.Ok((byte)relativeTarget);
-                }
-
-                int stepsIntoHome = relativeTarget - TotalMainTrackTiles;
+                // Entering home stretch
+                int stepsIntoHome = relativeTarget - RelativeMainMax;
                 int target = HomeStretchStartPosition + stepsIntoHome - 1;
 
                 if (target > HomePosition)
-                    return Result<byte, LudoError>.Err(LudoError.WouldOvershootHome);
+                {
+                    error = LudoError.WouldOvershootHome;
+                    return false;
+                }
 
-                return Result<byte, LudoError>.Ok((byte)target);
+                newPosition = (byte)target;
+                error = default;
+                return true;
             }
 
+            // Token on home stretch
             if (IsOnHomeStretch(tokenIndex))
             {
                 int target = currentPosition + steps;
                 if (target > HomePosition)
-                    return Result<byte, LudoError>.Err(LudoError.WouldOvershootHome);
+                {
+                    error = LudoError.WouldOvershootHome;
+                    return false;
+                }
 
-                return Result<byte, LudoError>.Ok((byte)target);
+                newPosition = (byte)target;
+                error = default;
+                return true;
             }
 
-            return Result<byte, LudoError>.Err(LudoError.TokenNotMovable);
+            error = LudoError.TokenNotMovable;
+            return false;
         }
 
-        private bool CanMoveToken(int tokenIndex, int steps)
+        private sbyte TryCaptureSingleOpponent(int movedTokenIndex)
         {
-            if (steps <= 0) return false;
-            var result = TryGetNewPosition(tokenIndex, steps);
-            return result.IsOk;
-        }
+            if (!IsOnMainTrack(movedTokenIndex)) return -1;
 
-        private void CaptureTokensAt(int movedTokenIndex)
-        {
-            if (!IsOnMainTrack(movedTokenIndex)) return;
-            if (IsOnSafeTile(movedTokenIndex)) return;
+            int moverPlayer = movedTokenIndex / TokensPerPlayer;
+            int landingAbs = GetAbsolutePosition(movedTokenIndex);
 
-            var movedTokenPlayerIndex = movedTokenIndex / TokensPerPlayer;
-            var newAbsolutePosition = GetAbsolutePosition(movedTokenIndex);
+            int foundOpponentIndex = -1;
+            int opponentsHere = 0;
 
             for (int i = 0; i < tokenPositions.Length; i++)
             {
-                if (movedTokenPlayerIndex == (i / TokensPerPlayer)) continue;
                 if (!IsOnMainTrack(i)) continue;
+                if ((i / TokensPerPlayer) == moverPlayer) continue;
+                if (GetAbsolutePosition(i) != landingAbs) continue;
 
-                var opponentAbsolutePosition = GetAbsolutePosition(i);
-                if (newAbsolutePosition == opponentAbsolutePosition)
-                {
-                    tokenPositions[i] = BasePosition;
-                }
+                opponentsHere++;
+                if (opponentsHere == 1) foundOpponentIndex = i;
+                if (opponentsHere > 1) return -1; // Multiple opponents = no capture
             }
-        }
 
-        private bool IsTileBlocked(int absolutePosition, int movingPlayerIndex)
-        {
-            for (int opponentPlayerIndex = 0; opponentPlayerIndex < playerCount; opponentPlayerIndex++)
+            if (opponentsHere == 1)
             {
-                if (opponentPlayerIndex == movingPlayerIndex) continue;
-
-                int opponentStartIndex = opponentPlayerIndex * TokensPerPlayer;
-                int countOnTile = 0;
-
-                for (int i = 0; i < TokensPerPlayer; i++)
-                {
-                    int tokenIndex = opponentStartIndex + i;
-                    if (IsOnMainTrack(tokenIndex) && GetAbsolutePosition(tokenIndex) == absolutePosition)
-                    {
-                        countOnTile++;
-                        if (countOnTile >= 2) return true;
-                    }
-                }
+                tokenPositions[foundOpponentIndex] = BasePosition;
+                return (sbyte)foundOpponentIndex;
             }
 
-            return false;
+            return -1;
         }
 
         private int GetAbsolutePosition(int tokenIndex)
         {
             if (!IsOnMainTrack(tokenIndex)) return -1;
 
-            var playerIndex = tokenIndex / TokensPerPlayer;
-            var relativePosition = tokenPositions[tokenIndex];
+            int playerIndex = tokenIndex / TokensPerPlayer;
+            int relativePosition = tokenPositions[tokenIndex];
             int playerOffset = GetPlayerTrackOffset(playerIndex);
 
-            int absolutePosition = (relativePosition - 1 + playerOffset) % TotalMainTrackTiles + 1;
-            return absolutePosition;
-        }
-
-        private int ToAbsoluteMainTrack(byte relativeMainTrackTile, int playerIndex)
-        {
-            int playerOffset = GetPlayerTrackOffset(playerIndex);
-            return (relativeMainTrackTile - 1 + playerOffset) % TotalMainTrackTiles + 1;
+            return (relativePosition - 1 + playerOffset) % AbsoluteTrackLength + 1;
         }
 
         private int GetPlayerTrackOffset(int playerIndex)
         {
-            if (playerCount == 2) return playerIndex * 2 * PlayerTrackOffset;
+            if (PlayerCount == 2) return playerIndex * 2 * PlayerTrackOffset;
             return playerIndex * PlayerTrackOffset;
         }
 
-        private byte GetHomeEntryTile(int playerIndex)
+        private static bool IsSafeAbsoluteTile(byte absolute)
         {
-            int playerOffset = GetPlayerTrackOffset(playerIndex);
-            if (playerOffset == 0) return TotalMainTrackTiles;
-            return (byte)playerOffset;
+            foreach (var t in SafeAbsoluteTiles)
+            {
+                if (t == absolute) return true;
+            }
+            return false;
         }
 
-        private bool IsValidTokenIndex(int tokenIndex)
-        {
-            return tokenIndex >= 0 && tokenIndex < tokenPositions.Length;
-        }
+        // =========================
+        // Display
+        // =========================
 
         public override string ToString()
         {
             var sb = new System.Text.StringBuilder();
-            sb.Append('P').Append(playerCount).Append(" | ");
-            for (int p = 0; p < playerCount; p++)
+            sb.Append('P').Append(PlayerCount).Append(" | ");
+
+            for (int p = 0; p < PlayerCount; p++)
             {
                 if (p > 0) sb.Append(" || ");
                 sb.Append('p').Append(p).Append(':');
@@ -338,16 +402,15 @@ namespace Ludo
 
                     if (IsOnHomeStretch(idx))
                     {
-                        int step = pos - HomeStretchStartPosition + 1; // 1..StepsToHome
-                        sb.Append('S').Append(step);
-                        if (IsOnSafeTile(idx)) sb.Append('*');
+                        int step = pos - HomeStretchStartPosition + 1;
+                        sb.Append('S').Append(step).Append('✨');
                         continue;
                     }
 
                     // On main track
                     int abs = GetAbsolutePosition(idx);
                     sb.Append(pos).Append('@').Append(abs);
-                    if (IsOnSafeTile(idx)) sb.Append('*');
+                    if (IsOnSafeTile(idx)) sb.Append('⭐');
                 }
             }
 
