@@ -486,66 +486,67 @@ namespace Ludo
         }
     }
 
+    [Serializable]
     public class LudoGame
     {
-        public LudoBoard Board { get; private set; }
-        public LudoState State { get; private set; }
+        public LudoBoard board;
+        public LudoState state;
 
-        public int CurrentPlayer => State.currentPlayer;
-        public bool GameWon { get; private set; }
-        public int Winner { get; private set; }
+        public int CurrentPlayer => state.currentPlayer;
+        public bool gameWon;
+        public int winner;
 
         private readonly Random _rng = new();
 
         private LudoGame(int playerCount)
         {
-            Board = LudoBoard.Create(playerCount);
-            State = LudoState.Create((byte)playerCount);
-            GameWon = false;
-            Winner = -1;
+            board = LudoBoard.Create(playerCount);
+            state = LudoState.Create((byte)playerCount);
+            gameWon = false;
+            winner = -1;
         }
 
         public static LudoGame Create(int playerCount) => new(playerCount);
 
         public Result<byte, GameError> RollDice()
         {
-            return Ensure(!GameWon, GameError.GameAlreadyWon)
-                .AndThen(_ => Ensure(State.CanRollDice(), GameError.NoTurnAvailable))
+            return Ensure(!gameWon, GameError.GameAlreadyWon)
+                .AndThen(_ => Ensure(state.CanRollDice(), GameError.NoTurnAvailable))
                 .Map(_ => (byte)_rng.Next(LudoUtil.MinDiceValue, LudoUtil.MaxDiceValue + 1))
                 .AndThen(dice =>
-                    Board.GetMovableTokens(State.currentPlayer, dice)
+                    board.GetMovableTokens(state.currentPlayer, dice)
                          .Map(mask => (dice, mask))
                 )
                 .Tap(t =>
                 {
-                    State.RecordDiceRoll(t.dice, t.mask);
-                    if (t.mask == 0) State.AdvanceTurn(); // auto-advance if no movable tokens
+                    state.RecordDiceRoll(t.dice, t.mask);
+                    if (t.mask == 0) state.AdvanceTurn(); // auto-advance if no movable tokens
                 })
                 .Map(t => t.dice);
         }
 
         public Result<MoveResult, GameError> MoveToken(int tokenLocalIndex)
         {
-            return Ensure(!GameWon, GameError.GameAlreadyWon)
-                .AndThen(_ => Ensure(State.MustMakeMove(), GameError.NoTurnAvailable))
-                .AndThen(_ => Ensure(State.IsTokenMovable(tokenLocalIndex), GameError.TokenNotMovable))
-                .Map(_ => LudoUtil.GetPlayerTokenStart(State.currentPlayer) + tokenLocalIndex) // absolute token index
+            return Ensure(!gameWon, GameError.GameAlreadyWon)
+                .AndThen(_ => Ensure(state.MustMakeMove(), GameError.NoTurnAvailable))
+                .AndThen(_ => Ensure(state.IsTokenMovable(tokenLocalIndex), GameError.TokenNotMovable))
+                .Map(_ => LudoUtil.GetPlayerTokenStart(state.currentPlayer) + tokenLocalIndex) // absolute token index
                 .AndThen(tokenIndex =>
-                    Board.MoveToken(tokenIndex, State.lastDiceRoll)
+                    board.MoveToken(tokenIndex, state.lastDiceRoll)
                          .Map(newPos => (tokenIndex, newPos))
                 )
                 .AndThen(t =>
-                    Board.TryCaptureOpponent(t.tokenIndex)
+                    board.TryCaptureOpponent(t.tokenIndex)
                          .Map(captured => (t.tokenIndex, t.newPos, captured))
                 )
-                .Tap(t => State.ClearTurnAfterMove(t.tokenIndex))
+                .Tap(t => state.ClearTurnAfterMove(t.tokenIndex))
                 .Tap(t =>
                 {
-                    var win = Board.HasPlayerWon(LudoUtil.GetPlayerFromToken(t.tokenIndex));
+                    var win = board.HasPlayerWon(LudoUtil.GetPlayerFromToken(t.tokenIndex));
                     if (win.IsOk && win.Unwrap())
                     {
-                        GameWon = true;
-                        Winner = LudoUtil.GetPlayerFromToken(t.tokenIndex);
+                        gameWon = true;
+                        winner = LudoUtil.GetPlayerFromToken(t.tokenIndex);
                     }
                 })
                 .Map(t => new MoveResult
