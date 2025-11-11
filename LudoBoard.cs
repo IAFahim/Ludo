@@ -1,6 +1,4 @@
-using System;
 using System.Text;
-using static Ludo.ResultExtensions;
 
 namespace Ludo
 {
@@ -18,77 +16,41 @@ namespace Ludo
         GameAlreadyWon
     }
 
-    // Generic Result<T, TError> for Railway Oriented Programming
-    public readonly struct Result<T, TError>
+    // -----------------------------------------
+    // Value types
+    // -----------------------------------------
+    public readonly record struct PlayerId(byte Value)
     {
-        private readonly bool _isOk;
-        private readonly T _value;
-        private readonly TError _error;
-
-        private Result(bool isOk, T value, TError error)
-        {
-            _isOk = isOk;
-            _value = value;
-            _error = error;
-        }
-
-        public static Result<T, TError> Ok(T value) => new Result<T, TError>(true, value, default!);
-        public static Result<T, TError> Err(TError error) => new Result<T, TError>(false, default!, error);
-
-        public bool IsOk => _isOk;
-        public bool IsErr => !_isOk;
-
-        public T Unwrap()
-        {
-            if (!_isOk) throw new InvalidOperationException($"Called Unwrap on Err: {_error}");
-            return _value;
-        }
-
-        public T UnwrapOr(T defaultValue) => _isOk ? _value : defaultValue;
-
-        public T UnwrapOrElse(Func<TError, T> defaultFunc) => _isOk ? _value : defaultFunc(_error);
-
-        public TError UnwrapErr()
-        {
-            if (_isOk) throw new InvalidOperationException("Called UnwrapErr on Ok");
-            return _error;
-        }
-
-        public Result<U, TError> Map<U>(Func<T, U> mapper) =>
-            _isOk ? Result<U, TError>.Ok(mapper(_value)) : Result<U, TError>.Err(_error);
-
-        public Result<T, F> MapErr<F>(Func<TError, F> mapper) =>
-            _isOk ? Result<T, F>.Ok(_value) : Result<T, F>.Err(mapper(_error));
-
-        public Result<U, TError> AndThen<U>(Func<T, Result<U, TError>> binder) =>
-            _isOk ? binder(_value) : Result<U, TError>.Err(_error);
-
-        public bool TryGetValue(out T value, out TError error)
-        {
-            value = _value;
-            error = _error;
-            return _isOk;
-        }
+        public override string ToString() => $"P{Value}";
+        public static implicit operator byte(PlayerId p) => p.Value;
     }
 
-    // Small helpers for “railway” flow
-    public readonly struct Unit
+    public readonly record struct TokenIndex(int Value)
     {
-        public static readonly Unit Value = new();
+        public override string ToString() => $"T#{Value}";
+        public static implicit operator int(TokenIndex i) => i.Value;
     }
 
-    public static class ResultExtensions
+    public readonly record struct Dice(byte Value)
     {
-        public static Result<Unit, E> Ensure<E>(bool condition, E error) =>
-            condition ? Result<Unit, E>.Ok(Unit.Value) : Result<Unit, E>.Err(error);
-
-        public static Result<T, E> Tap<T, E>(this Result<T, E> r, Action<T> action)
-        {
-            if (r.IsOk) action(r.Unwrap());
-            return r;
-        }
+        public override string ToString() => Value.ToString();
+        public static implicit operator byte(Dice d) => d.Value;
+        public static Dice FromByte(byte b) => new(b);
     }
 
+    [Flags]
+    public enum MovableTokens : sbyte
+    {
+        None = 0,
+        T0 = 1 << 0,
+        T1 = 1 << 1,
+        T2 = 1 << 2,
+        T3 = 1 << 3
+    }
+
+    // -----------------------------------------
+    // Utilities
+    // -----------------------------------------
     public static class LudoUtil
     {
         public const byte MinDiceValue = 1;
@@ -115,6 +77,9 @@ namespace Ludo
             GetPlayerFromToken(tokenIndex1) == GetPlayerFromToken(tokenIndex2);
     }
 
+    // -----------------------------------------
+    // State
+    // -----------------------------------------
     [Serializable]
     public struct LudoState
     {
@@ -124,7 +89,7 @@ namespace Ludo
         public byte lastDiceRoll;
         public bool hasRolled;
         public bool mustMove;
-        public sbyte movableTokensMask;
+        public MovableTokens movableTokensMask;
 
         public static LudoState Create(byte playerCount)
         {
@@ -136,20 +101,20 @@ namespace Ludo
                 lastDiceRoll = 0,
                 hasRolled = false,
                 mustMove = false,
-                movableTokensMask = 0
+                movableTokensMask = MovableTokens.None
             };
         }
 
         public bool CanRollDice() => !hasRolled && !mustMove;
         public bool MustMakeMove() => mustMove;
-        public bool HasMovableTokens() => movableTokensMask != 0;
+        public bool HasMovableTokens() => movableTokensMask != MovableTokens.None;
 
-        public void RecordDiceRoll(byte diceValue, sbyte movableMask)
+        public void RecordDiceRoll(byte diceValue, MovableTokens movableMask)
         {
             lastDiceRoll = diceValue;
             movableTokensMask = movableMask;
             hasRolled = true;
-            mustMove = movableMask != 0;
+            mustMove = movableMask != MovableTokens.None;
 
             if (diceValue == 6) consecutiveSixes++;
             else consecutiveSixes = 0;
@@ -161,14 +126,14 @@ namespace Ludo
             lastDiceRoll = 0;
             hasRolled = false;
             mustMove = false;
-            movableTokensMask = 0;
+            movableTokensMask = MovableTokens.None;
         }
 
-        public void ClearTurnAfterMove(int movedTokenIndex)
+        public void ClearTurnAfterMove(int _movedTokenIndex)
         {
             hasRolled = false;
             mustMove = false;
-            movableTokensMask = 0;
+            movableTokensMask = MovableTokens.None;
 
             // If rolled a 6, player gets another turn unless exceeded max consecutive sixes
             if (lastDiceRoll != 6 || consecutiveSixes >= LudoUtil.MaxConsecutiveSixes)
@@ -177,14 +142,17 @@ namespace Ludo
                 {
                     consecutiveSixes = 0;
                 }
-
                 AdvanceTurn();
             }
         }
 
-        public bool IsTokenMovable(int tokenLocalIndex) => (movableTokensMask & (1 << tokenLocalIndex)) != 0;
+        public bool IsTokenMovable(int tokenLocalIndex) =>
+            (movableTokensMask & (MovableTokens)(1 << tokenLocalIndex)) != MovableTokens.None;
     }
 
+    // -----------------------------------------
+    // Board (pure domain, TryX methods)
+    // -----------------------------------------
     [Serializable]
     public struct LudoBoard
     {
@@ -218,44 +186,59 @@ namespace Ludo
             };
         }
 
-        // ---------------- Core Move Operations (Railway) ----------------
+        // -----------------
+        // TryX operations
+        // -----------------
 
-        public Result<byte, GameError> MoveToken(int tokenIndex, byte diceRoll)
+        public bool TryMoveToken(int tokenIndex, byte diceRoll, out byte newPosition, out GameError error)
         {
+            newPosition = 0;
+            error = GameError.None;
+
             if (!LudoUtil.IsValidTokenIndex(tokenIndex, tokenPositions.Length))
-                return Result<byte, GameError>.Err(GameError.InvalidTokenIndex);
+            {
+                error = GameError.InvalidTokenIndex; return false;
+            }
 
             if (!LudoUtil.IsValidDiceRoll(diceRoll))
-                return Result<byte, GameError>.Err(GameError.InvalidDiceRoll);
+            {
+                error = GameError.InvalidDiceRoll; return false;
+            }
 
             if (IsHome(tokenIndex))
-                return Result<byte, GameError>.Err(GameError.TokenAlreadyHome);
+            {
+                error = GameError.TokenAlreadyHome; return false;
+            }
 
-            // Handle exit from base
+            // Exit from base
             if (IsAtBase(tokenIndex))
             {
                 if (diceRoll != ExitDiceValue)
-                    return Result<byte, GameError>.Err(GameError.TokenNotAtBase);
+                {
+                    error = GameError.TokenNotAtBase; return false;
+                }
 
                 tokenPositions[tokenIndex] = StartPosition;
-                return Result<byte, GameError>.Ok(StartPosition);
+                newPosition = StartPosition;
+                return true;
             }
 
-            var res = CalculateNewPosition(tokenIndex, diceRoll);
-            if (res.IsOk)
-            {
-                var newPosition = res.Unwrap();
-                tokenPositions[tokenIndex] = newPosition;
-            }
-            return res;
+            if (!TryCalculateNewPosition(tokenIndex, diceRoll, out var pos, out error))
+                return false;
+
+            tokenPositions[tokenIndex] = pos;
+            newPosition = pos;
+            return true;
         }
 
-
-        public Result<int, GameError> TryCaptureOpponent(int movedTokenIndex)
+        public bool TryCaptureOpponent(int movedTokenIndex, out int capturedTokenIndex, out GameError error)
         {
-            // Non-failing: Ok(-1) indicates no capture
+            error = GameError.None;
+            capturedTokenIndex = -1;
+
+            // Non-failing "no capture" is considered success.
             if (!IsOnMainTrack(movedTokenIndex) || IsOnSafeTile(movedTokenIndex))
-                return Result<int, GameError>.Ok(-1);
+                return true;
 
             int landingPosition = GetAbsolutePosition(movedTokenIndex);
 
@@ -272,29 +255,33 @@ namespace Ludo
                 if (opponentCount == 1)
                     opponentIndex = i;
                 else
-                    return Result<int, GameError>.Ok(-1); // Multiple opponents block capture
+                    return true; // multiple opponents block capture (safe "no capture")
             }
 
             if (opponentCount == 1)
             {
                 tokenPositions[opponentIndex] = BasePosition;
-                return Result<int, GameError>.Ok(opponentIndex);
+                capturedTokenIndex = opponentIndex;
             }
 
-            return Result<int, GameError>.Ok(-1);
+            return true;
         }
 
-        // ---------------- Query Operations (Railway) ----------------
-
-        public Result<sbyte, GameError> GetMovableTokens(int playerIndex, byte diceRoll)
+        public bool TryGetMovableTokens(int playerIndex, byte diceRoll, out MovableTokens mask, out GameError error)
         {
+            mask = MovableTokens.None;
+            error = GameError.None;
+
             if (!LudoUtil.IsValidPlayerIndex(playerIndex, PlayerCount))
-                return Result<sbyte, GameError>.Err(GameError.InvalidPlayerIndex);
+            {
+                error = GameError.InvalidPlayerIndex; return false;
+            }
 
             if (!LudoUtil.IsValidDiceRoll(diceRoll))
-                return Result<sbyte, GameError>.Err(GameError.InvalidDiceRoll);
+            {
+                error = GameError.InvalidDiceRoll; return false;
+            }
 
-            sbyte movableMask = 0;
             int tokenStart = LudoUtil.GetPlayerTokenStart(playerIndex);
 
             for (int i = 0; i < LudoUtil.TokensPerPlayer; i++)
@@ -302,33 +289,43 @@ namespace Ludo
                 int tokenIndex = tokenStart + i;
                 if (CanMoveToken(tokenIndex, diceRoll))
                 {
-                    movableMask |= (sbyte)(1 << i);
+                    mask |= (MovableTokens)(1 << i);
                 }
             }
 
-            return Result<sbyte, GameError>.Ok(movableMask);
+            return true;
         }
 
-        public Result<bool, GameError> HasPlayerWon(int playerIndex)
+        public bool TryHasPlayerWon(int playerIndex, out bool hasWon, out GameError error)
         {
+            hasWon = false;
+            error = GameError.None;
+
             if (!LudoUtil.IsValidPlayerIndex(playerIndex, PlayerCount))
-                return Result<bool, GameError>.Err(GameError.InvalidPlayerIndex);
+            {
+                error = GameError.InvalidPlayerIndex; return false;
+            }
 
             int tokenStart = LudoUtil.GetPlayerTokenStart(playerIndex);
             for (int i = 0; i < LudoUtil.TokensPerPlayer; i++)
             {
                 if (!IsHome(tokenStart + i))
-                    return Result<bool, GameError>.Ok(false);
+                {
+                    hasWon = false;
+                    return true;
+                }
             }
 
-            return Result<bool, GameError>.Ok(true);
+            hasWon = true;
+            return true;
         }
 
         public byte GetTokenPosition(int tokenIndex) =>
             LudoUtil.IsValidTokenIndex(tokenIndex, tokenPositions.Length) ? tokenPositions[tokenIndex] : (byte)0;
 
-        // ---------------- Position Checks ----------------
-
+        // -------------
+        // Position checks
+        // -------------
         public bool IsAtBase(int tokenIndex) =>
             tokenPositions[tokenIndex] == BasePosition;
 
@@ -359,22 +356,22 @@ namespace Ludo
             return IsSafeAbsolute((byte)absolutePos);
         }
 
-        // ---------------- Private Helpers ----------------
-
+        // -------------
+        // Helpers
+        // -------------
         private bool CanMoveToken(int tokenIndex, byte diceRoll)
         {
-            if (IsHome(tokenIndex))
-                return false;
+            if (IsHome(tokenIndex)) return false;
+            if (IsAtBase(tokenIndex)) return diceRoll == ExitDiceValue;
 
-            if (IsAtBase(tokenIndex))
-                return diceRoll == ExitDiceValue;
-
-            var result = CalculateNewPosition(tokenIndex, diceRoll);
-            return result.IsOk;
+            return TryCalculateNewPosition(tokenIndex, diceRoll, out _, out _);
         }
 
-        private Result<byte, GameError> CalculateNewPosition(int tokenIndex, byte diceRoll)
+        private bool TryCalculateNewPosition(int tokenIndex, byte diceRoll, out byte newPos, out GameError error)
         {
+            newPos = 0;
+            error = GameError.None;
+
             byte currentPos = tokenPositions[tokenIndex];
 
             // On main track
@@ -383,16 +380,22 @@ namespace Ludo
                 int targetPos = currentPos + diceRoll;
 
                 if (targetPos <= MainTrackLength)
-                    return Result<byte, GameError>.Ok((byte)targetPos);
+                {
+                    newPos = (byte)targetPos;
+                    return true;
+                }
 
                 // Entering home stretch
                 int stepsIntoHome = targetPos - MainTrackLength;
                 int homePos = HomeStretchStart + stepsIntoHome - 1;
 
                 if (homePos > HomePosition)
-                    return Result<byte, GameError>.Err(GameError.WouldOvershootHome);
+                {
+                    error = GameError.WouldOvershootHome; return false;
+                }
 
-                return Result<byte, GameError>.Ok((byte)homePos);
+                newPos = (byte)homePos;
+                return true;
             }
 
             // On home stretch
@@ -401,12 +404,16 @@ namespace Ludo
                 int targetPos = currentPos + diceRoll;
 
                 if (targetPos > HomePosition)
-                    return Result<byte, GameError>.Err(GameError.WouldOvershootHome);
+                {
+                    error = GameError.WouldOvershootHome; return false;
+                }
 
-                return Result<byte, GameError>.Ok((byte)targetPos);
+                newPos = (byte)targetPos;
+                return true;
             }
 
-            return Result<byte, GameError>.Err(GameError.TokenNotMovable);
+            error = GameError.TokenNotMovable;
+            return false;
         }
 
         private int GetAbsolutePosition(int tokenIndex)
@@ -437,7 +444,6 @@ namespace Ludo
                 if (safe == absolutePos)
                     return true;
             }
-
             return false;
         }
 
@@ -486,6 +492,9 @@ namespace Ludo
         }
     }
 
+    // -----------------------------------------
+    // Public Game API (TryX, no events)
+    // -----------------------------------------
     [Serializable]
     public class LudoGame
     {
@@ -496,64 +505,106 @@ namespace Ludo
         public bool gameWon;
         public int winner;
 
-        private readonly Random _rng = new();
+        private readonly Random _rng;
 
-        private LudoGame(int playerCount)
+        private LudoGame(int playerCount, int? seed = null)
         {
             board = LudoBoard.Create(playerCount);
             state = LudoState.Create((byte)playerCount);
             gameWon = false;
             winner = -1;
+            _rng = seed.HasValue ? new Random(seed.Value) : new Random();
         }
 
-        public static LudoGame Create(int playerCount) => new(playerCount);
+        public static LudoGame Create(int playerCount, int? seed = null) => new(playerCount, seed);
 
-        public Result<byte, GameError> RollDice()
+        /// <summary>
+        /// Roll dice for the current player. Mutates state and may auto-advance the turn
+        /// when no moves are available.
+        /// </summary>
+        public bool TryRollDice(out Dice dice, out GameError error)
         {
-            return Ensure(!gameWon, GameError.GameAlreadyWon)
-                .AndThen(_ => Ensure(state.CanRollDice(), GameError.NoTurnAvailable))
-                .Map(_ => (byte)_rng.Next(LudoUtil.MinDiceValue, LudoUtil.MaxDiceValue + 1))
-                .AndThen(dice =>
-                    board.GetMovableTokens(state.currentPlayer, dice)
-                         .Map(mask => (dice, mask))
-                )
-                .Tap(t =>
-                {
-                    state.RecordDiceRoll(t.dice, t.mask);
-                    if (t.mask == 0) state.AdvanceTurn(); // auto-advance if no movable tokens
-                })
-                .Map(t => t.dice);
+            dice = default;
+            error = GameError.None;
+
+            if (gameWon)
+            {
+                error = GameError.GameAlreadyWon; return false;
+            }
+
+            if (!state.CanRollDice())
+            {
+                error = GameError.NoTurnAvailable; return false;
+            }
+
+            // Generate roll
+            byte rollValue = (byte)_rng.Next(LudoUtil.MinDiceValue, LudoUtil.MaxDiceValue + 1);
+            dice = Dice.FromByte(rollValue);
+
+            // Compute movable tokens
+            if (!board.TryGetMovableTokens(state.currentPlayer, rollValue, out var mask, out error))
+                return false;
+
+            // Update state
+            state.RecordDiceRoll(rollValue, mask);
+
+            // If no moves available, advance turn immediately
+            if (mask == MovableTokens.None)
+            {
+                state.AdvanceTurn();
+            }
+
+            return true;
         }
 
-        public Result<MoveResult, GameError> MoveToken(int tokenLocalIndex)
+        /// <summary>
+        /// Move a token for the current player. Clears/advances the turn according to rules.
+        /// </summary>
+        public bool TryMoveToken(int tokenLocalIndex, out MoveResult result, out GameError error)
         {
-            return Ensure(!gameWon, GameError.GameAlreadyWon)
-                .AndThen(_ => Ensure(state.MustMakeMove(), GameError.NoTurnAvailable))
-                .AndThen(_ => Ensure(state.IsTokenMovable(tokenLocalIndex), GameError.TokenNotMovable))
-                .Map(_ => LudoUtil.GetPlayerTokenStart(state.currentPlayer) + tokenLocalIndex) // absolute token index
-                .AndThen(tokenIndex =>
-                    board.MoveToken(tokenIndex, state.lastDiceRoll)
-                         .Map(newPos => (tokenIndex, newPos))
-                )
-                .AndThen(t =>
-                    board.TryCaptureOpponent(t.tokenIndex)
-                         .Map(captured => (t.tokenIndex, t.newPos, captured))
-                )
-                .Tap(t => state.ClearTurnAfterMove(t.tokenIndex))
-                .Tap(t =>
-                {
-                    var win = board.HasPlayerWon(LudoUtil.GetPlayerFromToken(t.tokenIndex));
-                    if (win.IsOk && win.Unwrap())
-                    {
-                        gameWon = true;
-                        winner = LudoUtil.GetPlayerFromToken(t.tokenIndex);
-                    }
-                })
-                .Map(t => new MoveResult
-                {
-                    NewPosition = t.newPos,
-                    CapturedTokenIndex = t.captured
-                });
+            result = default;
+            error = GameError.None;
+
+            if (gameWon)
+            {
+                error = GameError.GameAlreadyWon; return false;
+            }
+
+            if (!state.MustMakeMove())
+            {
+                error = GameError.NoTurnAvailable; return false;
+            }
+
+            if (!state.IsTokenMovable(tokenLocalIndex))
+            {
+                error = GameError.TokenNotMovable; return false;
+            }
+
+            int absIndex = LudoUtil.GetPlayerTokenStart(state.currentPlayer) + tokenLocalIndex;
+
+            // 1) Move
+            if (!board.TryMoveToken(absIndex, state.lastDiceRoll, out var newPos, out error))
+                return false;
+
+            // 2) Capture (non-failing)
+            if (!board.TryCaptureOpponent(absIndex, out var capturedIndex, out _))
+                capturedIndex = -1;
+
+            // 3) Clear / Advance turn depending on 6s rule
+            state.ClearTurnAfterMove(absIndex);
+
+            // 4) Win check for the moving player
+            var me = new PlayerId(state.currentPlayer); // note: may be same or next depending on turn advance
+            if (board.TryHasPlayerWon((byte)((absIndex) / LudoUtil.TokensPerPlayer), out var hasWon, out _)
+                && hasWon)
+            {
+                gameWon = true;
+                winner = (absIndex) / LudoUtil.TokensPerPlayer;
+            }
+
+            // Result
+            result = new MoveResult { NewPosition = newPos, CapturedTokenIndex = capturedIndex };
+            return true;
         }
     }
 
@@ -561,7 +612,16 @@ namespace Ludo
     {
         public byte NewPosition;
         public int CapturedTokenIndex;
-
         public bool DidCapture => CapturedTokenIndex >= 0;
+
+        public static MoveResult CreateWithoutCapture(byte newPosition)
+        {
+            return new MoveResult { NewPosition = newPosition, CapturedTokenIndex = -1 };
+        }
+
+        public static MoveResult CreateWithCapture(byte newPosition, int capturedIndex)
+        {
+            return new MoveResult { NewPosition = newPosition, CapturedTokenIndex = capturedIndex };
+        }
     }
 }

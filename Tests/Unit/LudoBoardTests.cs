@@ -1,0 +1,86 @@
+using NUnit.Framework;
+using Ludo;
+using System;
+
+namespace Ludo.Tests.Unit
+{
+    /// <summary>
+    /// Unit tests for LudoBoard class - Board initialization and creation
+    /// </summary>
+    [TestFixture]
+    [Category("Unit")]
+    [Category("LudoBoard")]
+    public class LudoBoardTests
+    {
+        private LudoBoard _board;
+        private const int DefaultPlayerCount = 4;
+
+        [SetUp]
+        public void Setup()
+        {
+            _board = LudoBoard.Create(DefaultPlayerCount);
+        }
+
+        [Test]
+        public void Create_WithValidPlayerCount_CreatesBoard()
+        {
+            var board = LudoBoard.Create(2);
+            Assert.That(board.PlayerCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Create_WithInvalidPlayerCount_ThrowsException()
+        {
+            Assert.Throws<ArgumentException>(() => LudoBoard.Create(1));
+            Assert.Throws<ArgumentException>(() => LudoBoard.Create(5));
+        }
+
+        [Test]
+        public void AllTokensStartAtBase()
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                Assert.That(_board.IsAtBase(i), Is.True);
+            }
+        }
+
+        [Test]
+        public void Create_TwoPlayerGame_CreatesCorrectBoard()
+        {
+            var board2p = LudoBoard.Create(2);
+            Assert.That(board2p.PlayerCount, Is.EqualTo(2));
+            Assert.That(board2p.tokenPositions.Length, Is.EqualTo(8));
+        }
+
+        [Test]
+        public void Create_ThreePlayerGame_CreatesCorrectBoard()
+        {
+            var board3p = LudoBoard.Create(3);
+            Assert.That(board3p.PlayerCount, Is.EqualTo(3));
+            Assert.That(board3p.tokenPositions.Length, Is.EqualTo(12));
+        }
+
+        [Test]
+        public void ToString_GeneratesReadableOutput()
+        {
+            var output = _board.ToString();
+            Assert.That(output, Does.Contain("Players:"));
+            Assert.That(output, Does.Contain("P0:"));
+            Assert.That(output, Does.Contain("Base"));
+        }
+
+        [Test]
+        public void GetTokenPosition_WithValidIndex_ReturnsPosition()
+        {
+            _board.tokenPositions[5] = 25;
+            Assert.That(_board.GetTokenPosition(5), Is.EqualTo(25));
+        }
+
+        [Test]
+        public void GetTokenPosition_WithInvalidIndex_ReturnsZero()
+        {
+            Assert.That(_board.GetTokenPosition(20), Is.EqualTo(0));
+            Assert.That(_board.GetTokenPosition(-1), Is.EqualTo(0));
+        }
+    }
+}

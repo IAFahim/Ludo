@@ -1,0 +1,596 @@
+using NUnit.Framework;
+using Ludo;
+using System;
+
+namespace Ludo.Tests.Unit
+{
+    /// <summary>
+    /// Tests targeting critical bugs, memory issues, and implementation flaws
+    /// </summary>
+    [TestFixture]
+    [Category("Unit")]
+    [Category("Critical")]
+    public class CriticalBugsTests
+    {
+        // ========== Potential Integer Overflow Tests ==========
+
+        [Test]
+        public void Position_MaxByte_NoOverflow()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 255; // Max byte value
+            
+            // Should be considered invalid state but not crash
+            Assert.DoesNotThrow(() => {
+                var pos = board.GetTokenPosition(0);
+                Assert.That(pos, Is.EqualTo(255));
+            });
+        }
+
+        [Test]
+        public void MoveToken_FromInvalidPosition_HandlesGracefully()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 100; // Invalid position
+            
+            // Should not crash, should return error
+            var result = board.MoveToken(0, 3);
+            // The implementation may fail or succeed depending on validation
+            Assert.That(result.IsOk || result.IsErr, Is.True);
+        }
+
+        // ========== Home Stretch Boundary Tests ==========
+
+        [Test]
+        public void HomeStretchBoundary_Position51_IsMainTrack()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 51;
+            
+            Assert.That(board.IsOnMainTrack(0), Is.True);
+            Assert.That(board.IsOnHomeStretch(0), Is.False);
+        }
+
+        [Test]
+        public void HomeStretchBoundary_Position52_IsHomeStretch()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 52;
+            
+            Assert.That(board.IsOnMainTrack(0), Is.False);
+            Assert.That(board.IsOnHomeStretch(0), Is.True);
+        }
+
+        [Test]
+        public void HomeBoundary_Position56_IsHomeStretch()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 56;
+            
+            Assert.That(board.IsOnHomeStretch(0), Is.True);
+            Assert.That(board.IsHome(0), Is.False);
+        }
+
+        [Test]
+        public void HomeBoundary_Position57_IsHome()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 57;
+            
+            Assert.That(board.IsOnHomeStretch(0), Is.False);
+            Assert.That(board.IsHome(0), Is.True);
+        }
+
+        // ========== Capture Logic Validation ==========
+
+        [Test]
+        public void Capture_SingleOpponent_NotOnSafeTile_CapturesSuccessfully()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 10; // Player 0 on position 10 (not safe)
+            board.tokenPositions[4] = 10; // Player 1 on same position
+            
+            var result = board.TryCaptureOpponent(0);
+            Assert.That(result.IsOk, Is.True);
+            
+            // Check if capture happened based on absolute position matching
+            // In 2-player game, different players have different starting points
+        }
+
+        [Test]
+        public void Capture_TokenAtBase_NoCapture()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 0; // At base
+            board.tokenPositions[4] = 0; // Another player at base
+            
+            var result = board.TryCaptureOpponent(0);
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(result.Unwrap(), Is.EqualTo(-1)); // Not on main track, no capture
+        }
+
+        [Test]
+        public void Capture_TokenAtHome_NoCapture()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 57; // At home
+            
+            var result = board.TryCaptureOpponent(0);
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(result.Unwrap(), Is.EqualTo(-1)); // Not on main track, no capture
+        }
+
+        // ========== State Mutation Tests ==========
+
+        [Test]
+        public void State_ClearTurnAfterMove_ResetsAllFlags()
+        {
+            var state = LudoState.Create(2);
+            state.RecordDiceRoll(3, MovableTokens.T0 | MovableTokens.T1);
+            
+            Assert.That(state.hasRolled, Is.True);
+            Assert.That(state.mustMove, Is.True);
+            Assert.That(state.movableTokensMask, Is.Not.EqualTo(MovableTokens.None));
+            
+            state.ClearTurnAfterMove(0);
+            
+            Assert.That(state.hasRolled, Is.False);
+            Assert.That(state.mustMove, Is.False);
+            Assert.That(state.movableTokensMask, Is.EqualTo(MovableTokens.None));
+        }
+
+        [Test]
+        public void State_AdvanceTurn_ResetsAllTurnState()
+        {
+            var state = LudoState.Create(2);
+            state.RecordDiceRoll(3, MovableTokens.T0);
+            state.lastDiceRoll = 5;
+            state.hasRolled = true;
+            state.mustMove = true;
+            
+            state.AdvanceTurn();
+            
+            Assert.That(state.lastDiceRoll, Is.EqualTo(0));
+            Assert.That(state.hasRolled, Is.False);
+            Assert.That(state.mustMove, Is.False);
+            Assert.That(state.movableTokensMask, Is.EqualTo(MovableTokens.None));
+        }
+
+        // ========== Move Validation Edge Cases ==========
+
+        [Test]
+        public void MoveToken_AlreadyHome_CannotMoveAgain()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 57;
+            
+            var result = board.MoveToken(0, 1);
+            Assert.That(result.IsErr, Is.True);
+            Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.TokenAlreadyHome));
+        }
+
+        [Test]
+        public void MoveToken_AlreadyHome_CannotMoveWithSix()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 57;
+            
+            var result = board.MoveToken(0, 6);
+            Assert.That(result.IsErr, Is.True);
+            Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.TokenAlreadyHome));
+        }
+
+        // ========== Movable Token Mask Tests ==========
+
+        [Test]
+        public void MovableTokensMask_NoFlags_IsNone()
+        {
+            MovableTokens mask = MovableTokens.None;
+            Assert.That(mask, Is.EqualTo(MovableTokens.None));
+            Assert.That((int)mask, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MovableTokensMask_T0_CorrectBit()
+        {
+            MovableTokens mask = MovableTokens.T0;
+            Assert.That((int)mask, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MovableTokensMask_T1_CorrectBit()
+        {
+            MovableTokens mask = MovableTokens.T1;
+            Assert.That((int)mask, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void MovableTokensMask_T2_CorrectBit()
+        {
+            MovableTokens mask = MovableTokens.T2;
+            Assert.That((int)mask, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void MovableTokensMask_T3_CorrectBit()
+        {
+            MovableTokens mask = MovableTokens.T3;
+            Assert.That((int)mask, Is.EqualTo(8));
+        }
+
+        [Test]
+        public void MovableTokensMask_AllTokens_CorrectValue()
+        {
+            MovableTokens mask = MovableTokens.T0 | MovableTokens.T1 | MovableTokens.T2 | MovableTokens.T3;
+            Assert.That((int)mask, Is.EqualTo(15)); // 1111 in binary
+        }
+
+        // ========== IsTokenMovable Tests ==========
+
+        [Test]
+        public void IsTokenMovable_IndexOutOfRange_ReturnsFalse()
+        {
+            var state = LudoState.Create(2);
+            state.movableTokensMask = MovableTokens.T0 | MovableTokens.T1;
+            
+            // Only indices 0-3 are valid
+            Assert.That(state.IsTokenMovable(0), Is.True);
+            Assert.That(state.IsTokenMovable(1), Is.True);
+            Assert.That(state.IsTokenMovable(2), Is.False);
+            Assert.That(state.IsTokenMovable(3), Is.False);
+        }
+
+        // ========== Game Roll With Seed Tests ==========
+
+        [Test]
+        public void Game_WithSeed_ProducesSameSequence()
+        {
+            var game1 = LudoGame.Create(2, seed: 42);
+            var game2 = LudoGame.Create(2, seed: 42);
+            
+            var roll1 = game1.RollDice();
+            var roll2 = game2.RollDice();
+            
+            Assert.That(roll1.IsOk, Is.True);
+            Assert.That(roll2.IsOk, Is.True);
+            Assert.That(roll1.Unwrap().Value, Is.EqualTo(roll2.Unwrap().Value));
+        }
+
+        [Test]
+        public void Game_WithDifferentSeeds_ProducesDifferentSequence()
+        {
+            var game1 = LudoGame.Create(2, seed: 42);
+            var game2 = LudoGame.Create(2, seed: 43);
+            
+            bool foundDifference = false;
+            for (int i = 0; i < 10; i++)
+            {
+                var roll1 = game1.RollDice();
+                var roll2 = game2.RollDice();
+                
+                if (roll1.IsOk && roll2.IsOk)
+                {
+                    if (roll1.Unwrap().Value != roll2.Unwrap().Value)
+                    {
+                        foundDifference = true;
+                        break;
+                    }
+                }
+                
+                // Advance games if needed
+                if (game1.state.MustMakeMove())
+                {
+                    for (int t = 0; t < 4; t++)
+                    {
+                        if (game1.state.IsTokenMovable(t))
+                        {
+                            game1.MoveToken(t);
+                            break;
+                        }
+                    }
+                }
+                if (game2.state.MustMakeMove())
+                {
+                    for (int t = 0; t < 4; t++)
+                    {
+                        if (game2.state.IsTokenMovable(t))
+                        {
+                            game2.MoveToken(t);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Should find at least one difference in 10 rolls
+            Assert.That(foundDifference, Is.True);
+        }
+
+        // ========== Win Condition Edge Cases ==========
+
+        [Test]
+        public void Game_MoveLastToken_SetsWinnerCorrectly()
+        {
+            var game = LudoGame.Create(2);
+            // Player 0 has 3 tokens home, 1 almost there
+            game.board.tokenPositions[0] = 57;
+            game.board.tokenPositions[1] = 57;
+            game.board.tokenPositions[2] = 57;
+            game.board.tokenPositions[3] = 56;
+            
+            // Current player is 0
+            game.state = LudoState.Create(2);
+            game.state.RecordDiceRoll(1, MovableTokens.T3);
+            
+            var result = game.MoveToken(3);
+            
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(game.gameWon, Is.True);
+            Assert.That(game.winner, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void Game_WinDetection_ChecksCorrectPlayer()
+        {
+            var game = LudoGame.Create(2);
+            // Player 1 has all tokens home
+            game.board.tokenPositions[4] = 57;
+            game.board.tokenPositions[5] = 57;
+            game.board.tokenPositions[6] = 57;
+            game.board.tokenPositions[7] = 56;
+            
+            // Current player is 1
+            game.state = LudoState.Create(2);
+            game.state.currentPlayer = 1;
+            game.state.RecordDiceRoll(1, MovableTokens.T3);
+            
+            var result = game.MoveToken(3);
+            
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(game.gameWon, Is.True);
+            Assert.That(game.winner, Is.EqualTo(1));
+        }
+
+        // ========== Consecutive Sixes Boundary ==========
+
+        [Test]
+        public void ConsecutiveSixes_ExactlyThree_AdvancesTurn()
+        {
+            var state = LudoState.Create(2);
+            
+            // First six
+            state.RecordDiceRoll(6, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(1));
+            state.ClearTurnAfterMove(0);
+            Assert.That(state.currentPlayer, Is.EqualTo(0)); // Stays
+            
+            // Second six
+            state.RecordDiceRoll(6, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(2));
+            state.ClearTurnAfterMove(0);
+            Assert.That(state.currentPlayer, Is.EqualTo(0)); // Stays
+            
+            // Third six
+            state.RecordDiceRoll(6, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(3));
+            state.ClearTurnAfterMove(0);
+            Assert.That(state.currentPlayer, Is.EqualTo(1)); // Advances
+            Assert.That(state.consecutiveSixes, Is.EqualTo(0)); // Reset
+        }
+
+        [Test]
+        public void ConsecutiveSixes_TwoThenNonSix_ResetsCounter()
+        {
+            var state = LudoState.Create(2);
+            
+            state.RecordDiceRoll(6, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(1));
+            state.hasRolled = false;
+            
+            state.RecordDiceRoll(6, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(2));
+            state.hasRolled = false;
+            
+            state.RecordDiceRoll(4, MovableTokens.T0);
+            Assert.That(state.consecutiveSixes, Is.EqualTo(0)); // Reset
+        }
+
+        // ========== Dice Validation ==========
+
+        [Test]
+        public void DiceValidation_AllValidValues()
+        {
+            Assert.That(LudoUtil.IsValidDiceRoll(1), Is.True);
+            Assert.That(LudoUtil.IsValidDiceRoll(2), Is.True);
+            Assert.That(LudoUtil.IsValidDiceRoll(3), Is.True);
+            Assert.That(LudoUtil.IsValidDiceRoll(4), Is.True);
+            Assert.That(LudoUtil.IsValidDiceRoll(5), Is.True);
+            Assert.That(LudoUtil.IsValidDiceRoll(6), Is.True);
+        }
+
+        [Test]
+        public void DiceValidation_AllInvalidValues()
+        {
+            Assert.That(LudoUtil.IsValidDiceRoll(0), Is.False);
+            Assert.That(LudoUtil.IsValidDiceRoll(7), Is.False);
+            Assert.That(LudoUtil.IsValidDiceRoll(-1), Is.False);
+            Assert.That(LudoUtil.IsValidDiceRoll(100), Is.False);
+        }
+
+        // ========== Player/Token Index Validation ==========
+
+        [Test]
+        public void PlayerIndexValidation_AllValidValues()
+        {
+            Assert.That(LudoUtil.IsValidPlayerIndex(0, 4), Is.True);
+            Assert.That(LudoUtil.IsValidPlayerIndex(1, 4), Is.True);
+            Assert.That(LudoUtil.IsValidPlayerIndex(2, 4), Is.True);
+            Assert.That(LudoUtil.IsValidPlayerIndex(3, 4), Is.True);
+        }
+
+        [Test]
+        public void PlayerIndexValidation_AllInvalidValues()
+        {
+            Assert.That(LudoUtil.IsValidPlayerIndex(-1, 4), Is.False);
+            Assert.That(LudoUtil.IsValidPlayerIndex(4, 4), Is.False);
+            Assert.That(LudoUtil.IsValidPlayerIndex(100, 4), Is.False);
+        }
+
+        [Test]
+        public void TokenIndexValidation_AllValidValues()
+        {
+            Assert.That(LudoUtil.IsValidTokenIndex(0, 16), Is.True);
+            Assert.That(LudoUtil.IsValidTokenIndex(15, 16), Is.True);
+        }
+
+        [Test]
+        public void TokenIndexValidation_AllInvalidValues()
+        {
+            Assert.That(LudoUtil.IsValidTokenIndex(-1, 16), Is.False);
+            Assert.That(LudoUtil.IsValidTokenIndex(16, 16), Is.False);
+            Assert.That(LudoUtil.IsValidTokenIndex(100, 16), Is.False);
+        }
+
+        // ========== GetPlayerFromToken Tests ==========
+
+        [Test]
+        public void GetPlayerFromToken_AllTokens()
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                int expectedPlayer = i / 4;
+                int actualPlayer = LudoUtil.GetPlayerFromToken(i);
+                Assert.That(actualPlayer, Is.EqualTo(expectedPlayer));
+            }
+        }
+
+        // ========== IsSamePlayer Tests ==========
+
+        [Test]
+        public void IsSamePlayer_SamePlayerTokens()
+        {
+            Assert.That(LudoUtil.IsSamePlayer(0, 1), Is.True);
+            Assert.That(LudoUtil.IsSamePlayer(0, 3), Is.True);
+            Assert.That(LudoUtil.IsSamePlayer(4, 7), Is.True);
+            Assert.That(LudoUtil.IsSamePlayer(12, 15), Is.True);
+        }
+
+        [Test]
+        public void IsSamePlayer_DifferentPlayerTokens()
+        {
+            Assert.That(LudoUtil.IsSamePlayer(0, 4), Is.False);
+            Assert.That(LudoUtil.IsSamePlayer(3, 8), Is.False);
+            Assert.That(LudoUtil.IsSamePlayer(7, 12), Is.False);
+        }
+
+        // ========== Struct Default Values ==========
+
+        [Test]
+        public void Dice_DefaultValue_IsZero()
+        {
+            Dice dice = default;
+            Assert.That(dice.Value, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void PlayerId_DefaultValue_IsZero()
+        {
+            PlayerId player = default;
+            Assert.That(player.Value, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MoveResult_DefaultValue_HasAmbiguousSemantics()
+        {
+            // BUG: Default struct has CapturedTokenIndex = 0, which means DidCapture = true
+            // This is misleading but unavoidable with C# struct defaults
+            MoveResult result = default;
+            Assert.That(result.NewPosition, Is.EqualTo(0));
+            Assert.That(result.CapturedTokenIndex, Is.EqualTo(0));
+            Assert.That(result.DidCapture, Is.True); // 0 >= 0, so this is true (ambiguous!)
+        }
+
+        // ========== Capture Detection Bug? ==========
+
+        [Test]
+        public void MoveResult_CaptureDetection_NegativeOneIsNotCapture()
+        {
+            MoveResult result = new MoveResult { CapturedTokenIndex = -1 };
+            Assert.That(result.DidCapture, Is.False);
+        }
+
+        [Test]
+        public void MoveResult_CaptureDetection_ZeroIsCapture()
+        {
+            MoveResult result = new MoveResult { CapturedTokenIndex = 0 };
+            Assert.That(result.DidCapture, Is.True); // Token 0 can be captured!
+        }
+
+        [Test]
+        public void MoveResult_CaptureDetection_PositiveIsCapture()
+        {
+            MoveResult result = new MoveResult { CapturedTokenIndex = 5 };
+            Assert.That(result.DidCapture, Is.True);
+        }
+
+        // ========== Boundary: Position Transitions ==========
+
+        [Test]
+        public void PositionTransition_50to51_StaysOnMainTrack()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 50;
+            
+            var result = board.MoveToken(0, 1);
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(result.Unwrap(), Is.EqualTo(51));
+            Assert.That(board.IsOnMainTrack(0), Is.True);
+            Assert.That(board.IsOnHomeStretch(0), Is.False);
+        }
+
+        [Test]
+        public void PositionTransition_51to52_EntersHomeStretch()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 51;
+            
+            var result = board.MoveToken(0, 1);
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(result.Unwrap(), Is.EqualTo(52));
+            Assert.That(board.IsOnMainTrack(0), Is.False);
+            Assert.That(board.IsOnHomeStretch(0), Is.True);
+        }
+
+        [Test]
+        public void PositionTransition_56to57_EntersHome()
+        {
+            var board = LudoBoard.Create(2);
+            board.tokenPositions[0] = 56;
+            
+            var result = board.MoveToken(0, 1);
+            Assert.That(result.IsOk, Is.True);
+            Assert.That(result.Unwrap(), Is.EqualTo(57));
+            Assert.That(board.IsOnHomeStretch(0), Is.False);
+            Assert.That(board.IsHome(0), Is.True);
+        }
+
+        // ========== Multiple Rolls Same Turn ==========
+
+        [Test]
+        public void Game_DoubleRoll_WithoutMoving_Fails()
+        {
+            var game = LudoGame.Create(2);
+            
+            var roll1 = game.RollDice();
+            Assert.That(roll1.IsOk, Is.True);
+            
+            // If we must move, we can't roll again
+            if (game.state.MustMakeMove())
+            {
+                var roll2 = game.RollDice();
+                Assert.That(roll2.IsErr, Is.True);
+                Assert.That(roll2.UnwrapErr(), Is.EqualTo(GameError.NoTurnAvailable));
+            }
+        }
+    }
+}

@@ -1,0 +1,65 @@
+using Ludo;
+
+namespace Ludo.Tests.Helpers
+{
+    /// <summary>
+    /// Helper methods for setting up test scenarios
+    /// </summary>
+    public static class TestHelpers
+    {
+        /// <summary>
+        /// Creates a board with all tokens for a player at home
+        /// </summary>
+        public static LudoBoard CreateBoardWithPlayerWon(int playerIndex, int playerCount = 4)
+        {
+            var board = LudoBoard.Create(playerCount);
+            int tokenStart = playerIndex * TestConstants.TokensPerPlayer;
+
+            for (int i = 0; i < TestConstants.TokensPerPlayer; i++)
+            {
+                board.tokenPositions[tokenStart + i] = TestConstants.HomePosition;
+            }
+
+            return board;
+        }
+
+        /// <summary>
+        /// Creates a board with tokens at specific positions
+        /// </summary>
+        public static LudoBoard CreateBoardWithTokens(params (int tokenIndex, byte position)[] tokens)
+        {
+            var board = LudoBoard.Create(4);
+
+            foreach (var (tokenIndex, position) in tokens)
+            {
+                if (tokenIndex >= 0 && tokenIndex < board.tokenPositions.Length)
+                {
+                    board.tokenPositions[tokenIndex] = position;
+                }
+            }
+
+            return board;
+        }
+
+        /// <summary>
+        /// Moves a token out of base (simulates rolling a 6)
+        /// </summary>
+        public static void MoveTokenOutOfBase(LudoBoard board, int tokenIndex)
+        {
+            board.MoveToken(tokenIndex, TestConstants.ExitDiceValue);
+        }
+
+        /// <summary>
+        /// Creates a game state with a specific player's turn
+        /// </summary>
+        public static LudoState CreateStateWithCurrentPlayer(int playerIndex, int playerCount = 4)
+        {
+            var state = LudoState.Create((byte)playerCount);
+            while (state.currentPlayer != playerIndex)
+            {
+                state.AdvanceTurn();
+            }
+            return state;
+        }
+    }
+}

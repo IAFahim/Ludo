@@ -1,0 +1,72 @@
+using NUnit.Framework;
+using Ludo;
+
+namespace Ludo.Tests.Unit
+{
+    /// <summary>
+    /// Unit tests for LudoBoard class - Position queries and checks
+    /// </summary>
+    [TestFixture]
+    [Category("Unit")]
+    [Category("LudoBoard")]
+    [Category("Position")]
+    public class LudoBoardPositionTests
+    {
+        private LudoBoard _board;
+
+        [SetUp]
+        public void Setup()
+        {
+            _board = LudoBoard.Create(4);
+        }
+
+        [Test]
+        public void IsOnMainTrack_ReturnsCorrectValue()
+        {
+            _board.tokenPositions[0] = 0;
+            Assert.That(_board.IsOnMainTrack(0), Is.False);
+
+            _board.tokenPositions[0] = 1;
+            Assert.That(_board.IsOnMainTrack(0), Is.True);
+
+            _board.tokenPositions[0] = 51;
+            Assert.That(_board.IsOnMainTrack(0), Is.True);
+
+            _board.tokenPositions[0] = 52;
+            Assert.That(_board.IsOnMainTrack(0), Is.False);
+        }
+
+        [Test]
+        public void IsOnHomeStretch_ReturnsCorrectValue()
+        {
+            _board.tokenPositions[0] = 51;
+            Assert.That(_board.IsOnHomeStretch(0), Is.False);
+
+            _board.tokenPositions[0] = 52;
+            Assert.That(_board.IsOnHomeStretch(0), Is.True);
+
+            _board.tokenPositions[0] = 56;
+            Assert.That(_board.IsOnHomeStretch(0), Is.True);
+
+            _board.tokenPositions[0] = 57;
+            Assert.That(_board.IsOnHomeStretch(0), Is.False);
+        }
+
+        [Test]
+        public void IsHome_ReturnsCorrectValue()
+        {
+            _board.tokenPositions[0] = 56;
+            Assert.That(_board.IsHome(0), Is.False);
+
+            _board.tokenPositions[0] = 57;
+            Assert.That(_board.IsHome(0), Is.True);
+        }
+
+        [Test]
+        public void IsOnSafeTile_HomeStretch_ReturnsTrue()
+        {
+            _board.tokenPositions[0] = 52;
+            Assert.That(_board.IsOnSafeTile(0), Is.True);
+        }
+    }
+}
