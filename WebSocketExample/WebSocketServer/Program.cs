@@ -59,3 +59,5 @@ async Task HandleWebSocket(WebSocket webSocket)
         Console.WriteLine($"Error: {ex.Message}");
     }
 }
+
+public partial class Program { }
