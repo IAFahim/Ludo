@@ -143,9 +143,9 @@ namespace Ludo.Tests.Integration
                             {
                                 var player = players[tokenEvt.Player];
                                 
-                                if (tokenEvt.CapturedAbsToken >= 0)
+                                if (tokenEvt.CapturedAbsoluteTokenIndex >= 0)
                                 {
-                                    int victimPlayer = tokenEvt.CapturedAbsToken / 4;
+                                    int victimPlayer = tokenEvt.CapturedAbsoluteTokenIndex / 4;
                                     var victim = players[victimPlayer];
                                     
                                     player.Captures++;

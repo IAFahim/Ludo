@@ -105,109 +105,109 @@ public struct LudoBoard
             : (byte)0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsAtBase(int absToken) => TokenPositions[absToken] == BasePosition;
+    public bool IsAtBase(int absoluteTokenIndex) => TokenPositions[absoluteTokenIndex] == BasePosition;
 
-    public bool IsOnMainTrack(int absToken)
+    public bool IsOnMainTrack(int absoluteTokenIndex)
     {
-        byte pos = TokenPositions[absToken];
-        return pos is >= StartPosition and <= MainTrackLength;
+        byte position = TokenPositions[absoluteTokenIndex];
+        return position is >= StartPosition and <= MainTrackLength;
     }
 
-    public bool IsOnHomeStretch(int absToken)
+    public bool IsOnHomeStretch(int absoluteTokenIndex)
     {
-        byte pos = TokenPositions[absToken];
-        return pos is >= HomeStretchStart and < HomePosition;
+        byte position = TokenPositions[absoluteTokenIndex];
+        return position is >= HomeStretchStart and < HomePosition;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool IsHome(int absToken) => TokenPositions[absToken] == HomePosition;
+    public bool IsHome(int absoluteTokenIndex) => TokenPositions[absoluteTokenIndex] == HomePosition;
 
-    public bool IsOnSafeTile(int absToken)
+    public bool IsOnSafeTile(int absoluteTokenIndex)
     {
-        if (IsOnHomeStretch(absToken)) return true;
-        if (!IsOnMainTrack(absToken)) return false;
-        int a = GetAbsolutePosition(absToken);
-        return a is 1 or 14 or 27 or 40;
+        if (IsOnHomeStretch(absoluteTokenIndex)) return true;
+        if (!IsOnMainTrack(absoluteTokenIndex)) return false;
+        int absolutePosition = GetAbsolutePosition(absoluteTokenIndex);
+        return absolutePosition is 1 or 14 or 27 or 40;
     }
 
-    public bool TryGetMovableTokens(int playerIndex, byte dice, out MovableTokens mask, out GameError error)
+    public bool TryGetMovableTokens(int playerIndex, byte diceValue, out MovableTokens movableTokensMask, out GameError error)
     {
-        mask = MovableTokens.None; error = GameError.None;
+        movableTokensMask = MovableTokens.None; error = GameError.None;
 
         if (!LudoUtil.IsValidPlayerIndex(playerIndex, PlayerCount))
             { error = GameError.InvalidPlayerIndex; return false; }
 
-        if (!LudoUtil.IsValidDiceRoll(dice))
+        if (!LudoUtil.IsValidDiceRoll(diceValue))
             { error = GameError.InvalidDiceRoll; return false; }
 
-        int start = LudoUtil.GetPlayerTokenStart(playerIndex);
+        int startTokenIndex = LudoUtil.GetPlayerTokenStart(playerIndex);
         for (int i = 0; i < LudoUtil.TokensPerPlayer; i++)
         {
-            int absIdx = start + i;
-            if (CanMoveToken(absIdx, dice))
-                mask |= (MovableTokens)(1 << i);
+            int absoluteTokenIndex = startTokenIndex + i;
+            if (CanMoveToken(absoluteTokenIndex, diceValue))
+                movableTokensMask |= (MovableTokens)(1 << i);
         }
         return true;
     }
 
-    public bool TryMoveToken(int absTokenIndex, byte dice, out byte newPos, out GameError error)
+    public bool TryMoveToken(int absoluteTokenIndex, byte diceValue, out byte newPosition, out GameError error)
     {
-        newPos = 0; error = GameError.None;
+        newPosition = 0; error = GameError.None;
 
-        if (!LudoUtil.IsValidTokenIndex(absTokenIndex, TokenPositions.Length))
+        if (!LudoUtil.IsValidTokenIndex(absoluteTokenIndex, TokenPositions.Length))
             { error = GameError.InvalidTokenIndex; return false; }
 
-        if (!LudoUtil.IsValidDiceRoll(dice))
+        if (!LudoUtil.IsValidDiceRoll(diceValue))
             { error = GameError.InvalidDiceRoll; return false; }
 
-        if (IsHome(absTokenIndex))
+        if (IsHome(absoluteTokenIndex))
             { error = GameError.TokenAlreadyHome; return false; }
 
-        if (IsAtBase(absTokenIndex))
+        if (IsAtBase(absoluteTokenIndex))
         {
-            if (dice != ExitDiceValue)
+            if (diceValue != ExitDiceValue)
                 { error = GameError.CannotLeaveBaseWithoutSix; return false; }
 
-            TokenPositions[absTokenIndex] = StartPosition;
-            newPos = StartPosition;
+            TokenPositions[absoluteTokenIndex] = StartPosition;
+            newPosition = StartPosition;
             return true;
         }
 
         // On track or in stretch
-        if (!TryCalculateNewPosition(absTokenIndex, dice, out var p, out error))
+        if (!TryCalculateNewPosition(absoluteTokenIndex, diceValue, out var position, out error))
             return false;
 
-        TokenPositions[absTokenIndex] = p;
-        newPos = p;
+        TokenPositions[absoluteTokenIndex] = position;
+        newPosition = position;
         return true;
     }
 
-    public bool TryCaptureOpponent(int movedAbsToken, out int capturedAbsToken)
+    public bool TryCaptureOpponent(int movedAbsoluteTokenIndex, out int capturedAbsoluteTokenIndex)
     {
-        capturedAbsToken = -1;
+        capturedAbsoluteTokenIndex = -1;
 
-        if (!IsOnMainTrack(movedAbsToken) || IsOnSafeTile(movedAbsToken))
+        if (!IsOnMainTrack(movedAbsoluteTokenIndex) || IsOnSafeTile(movedAbsoluteTokenIndex))
             return true;
 
-        int landingAbs = GetAbsolutePosition(movedAbsToken);
-        int oppCount = 0;
-        int oppIdx = -1;
+        int landingAbsolutePosition = GetAbsolutePosition(movedAbsoluteTokenIndex);
+        int opponentCount = 0;
+        int opponentTokenIndex = -1;
 
         for (int i = 0; i < TokenPositions.Length; i++)
         {
             if (!IsOnMainTrack(i)) continue;
-            if (LudoUtil.IsSamePlayer(i, movedAbsToken)) continue;
-            if (GetAbsolutePosition(i) != landingAbs) continue;
+            if (LudoUtil.IsSamePlayer(i, movedAbsoluteTokenIndex)) continue;
+            if (GetAbsolutePosition(i) != landingAbsolutePosition) continue;
 
-            oppCount++;
-            if (oppCount == 1) oppIdx = i;
+            opponentCount++;
+            if (opponentCount == 1) opponentTokenIndex = i;
             else return true; // blockade: no capture
         }
 
-        if (oppCount == 1)
+        if (opponentCount == 1)
         {
-            TokenPositions[oppIdx] = 0; // send back to base
-            capturedAbsToken = oppIdx;
+            TokenPositions[opponentTokenIndex] = 0; // send back to base
+            capturedAbsoluteTokenIndex = opponentTokenIndex;
         }
         return true;
     }
@@ -218,50 +218,50 @@ public struct LudoBoard
         if (!LudoUtil.IsValidPlayerIndex(playerIndex, PlayerCount))
             { error = GameError.InvalidPlayerIndex; return false; }
 
-        int start = LudoUtil.GetPlayerTokenStart(playerIndex);
+        int startTokenIndex = LudoUtil.GetPlayerTokenStart(playerIndex);
         for (int i = 0; i < LudoUtil.TokensPerPlayer; i++)
-            if (!IsHome(start + i)) return true;
+            if (!IsHome(startTokenIndex + i)) return true;
 
         hasWon = true;
         return true;
     }
 
     // ---- internals
-    private bool CanMoveToken(int absTokenIndex, byte dice)
+    private bool CanMoveToken(int absoluteTokenIndex, byte diceValue)
     {
-        if (IsHome(absTokenIndex)) return false;
-        if (IsAtBase(absTokenIndex)) return dice == 6;
-        return TryCalculateNewPosition(absTokenIndex, dice, out _, out _);
+        if (IsHome(absoluteTokenIndex)) return false;
+        if (IsAtBase(absoluteTokenIndex)) return diceValue == 6;
+        return TryCalculateNewPosition(absoluteTokenIndex, diceValue, out _, out _);
     }
 
-    private bool TryCalculateNewPosition(int absTokenIndex, byte dice, out byte newPos, out GameError error)
+    private bool TryCalculateNewPosition(int absoluteTokenIndex, byte diceValue, out byte newPosition, out GameError error)
     {
-        newPos = 0; error = GameError.None;
-        byte cur = TokenPositions[absTokenIndex];
+        newPosition = 0; error = GameError.None;
+        byte currentPosition = TokenPositions[absoluteTokenIndex];
 
         // main track
-        if (cur is >= 1 and <= 51)
+        if (currentPosition is >= 1 and <= 51)
         {
-            int target = cur + dice;
-            if (target <= 51)
+            int targetPosition = currentPosition + diceValue;
+            if (targetPosition <= 51)
             {
-                newPos = (byte)target;
+                newPosition = (byte)targetPosition;
                 return true;
             }
             // cross into home stretch
-            int intoStretch = target - 51;
-            int stretchPos = 52 + intoStretch - 1;
-            if (stretchPos > 57) { error = GameError.WouldOvershootHome; return false; }
-            newPos = (byte)stretchPos;
+            int intoStretch = targetPosition - 51;
+            int stretchPosition = 52 + intoStretch - 1;
+            if (stretchPosition > 57) { error = GameError.WouldOvershootHome; return false; }
+            newPosition = (byte)stretchPosition;
             return true;
         }
 
         // already in stretch
-        if (cur is >= 52 and < 57)
+        if (currentPosition is >= 52 and < 57)
         {
-            int target = cur + dice;
-            if (target > 57) { error = GameError.WouldOvershootHome; return false; }
-            newPos = (byte)target;
+            int targetPosition = currentPosition + diceValue;
+            if (targetPosition > 57) { error = GameError.WouldOvershootHome; return false; }
+            newPosition = (byte)targetPosition;
             return true;
         }
 
@@ -269,39 +269,39 @@ public struct LudoBoard
         return false;
     }
 
-    private int GetAbsolutePosition(int absToken)
+    private int GetAbsolutePosition(int absoluteTokenIndex)
     {
-        if (!IsOnMainTrack(absToken)) return -1;
-        int player = LudoUtil.GetPlayerFromToken(absToken);
-        int rel = TokenPositions[absToken]; // 1..51
-        int offset = (PlayerCount == 2) ? player * 2 * QuarterTrack : player * QuarterTrack;
-        return (rel - 1 + offset) % 52 + 1;
+        if (!IsOnMainTrack(absoluteTokenIndex)) return -1;
+        int playerIndex = LudoUtil.GetPlayerFromToken(absoluteTokenIndex);
+        int relativePosition = TokenPositions[absoluteTokenIndex]; // 1..51
+        int offset = (PlayerCount == 2) ? playerIndex * 2 * QuarterTrack : playerIndex * QuarterTrack;
+        return (relativePosition - 1 + offset) % 52 + 1;
     }
 
     public override string ToString()
     {
         var sb = new StringBuilder();
         sb.Append("Players: ").Append(PlayerCount).Append(" | ");
-        for (int p = 0; p < PlayerCount; p++)
+        for (int playerIndex = 0; playerIndex < PlayerCount; playerIndex++)
         {
-            if (p > 0) sb.Append(" || ");
-            sb.Append("P").Append(p).Append(": ");
-            int start = LudoUtil.GetPlayerTokenStart(p);
-            for (int t = 0; t < LudoUtil.TokensPerPlayer; t++)
+            if (playerIndex > 0) sb.Append(" || ");
+            sb.Append("P").Append(playerIndex).Append(": ");
+            int startTokenIndex = LudoUtil.GetPlayerTokenStart(playerIndex);
+            for (int tokenIndex = 0; tokenIndex < LudoUtil.TokensPerPlayer; tokenIndex++)
             {
-                if (t > 0) sb.Append(", ");
-                int idx = start + t;
-                byte pos = TokenPositions[idx];
+                if (tokenIndex > 0) sb.Append(", ");
+                int absoluteTokenIndex = startTokenIndex + tokenIndex;
+                byte position = TokenPositions[absoluteTokenIndex];
 
-                if (pos == 0) sb.Append("Base");
-                else if (pos == 57) sb.Append("Home✨");
-                else if (pos >= 52) sb.Append("Stretch-").Append(pos - 52 + 1);
+                if (position == 0) sb.Append("Base");
+                else if (position == 57) sb.Append("Home✨");
+                else if (position >= 52) sb.Append("Stretch-").Append(position - 52 + 1);
                 else
                 {
-                    sb.Append(pos).Append("@");
-                    int a = GetAbsolutePosition(idx);
-                    sb.Append(a);
-                    if (IsOnSafeTile(idx)) sb.Append("⭐");
+                    sb.Append(position).Append("@");
+                    int absolutePosition = GetAbsolutePosition(absoluteTokenIndex);
+                    sb.Append(absolutePosition);
+                    if (IsOnSafeTile(absoluteTokenIndex)) sb.Append("⭐");
                 }
             }
         }
@@ -345,11 +345,11 @@ public struct LudoState
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool CanRollDice() => !HasRolled && !MustMove;
 
-    public void RecordDiceRoll(byte value, MovableTokens mask)
+    public void RecordDiceRoll(byte diceValue, MovableTokens movableTokensMask)
     {
-        LastDiceRoll = value;
-        MovableTokensMask = mask;
-        ConsecutiveSixes = value == 6 ? (byte)(ConsecutiveSixes + 1) : (byte)0;
+        LastDiceRoll = diceValue;
+        MovableTokensMask = movableTokensMask;
+        ConsecutiveSixes = diceValue == 6 ? (byte)(ConsecutiveSixes + 1) : (byte)0;
         Version++;
     }
 
@@ -375,11 +375,11 @@ public struct LudoState
 public readonly struct MoveResult
 {
     public byte NewPosition { get; init; }
-    public int CapturedAbsToken { get; init; }
-    public bool DidCapture => CapturedAbsToken >= 0;
+    public int CapturedAbsoluteTokenIndex { get; init; }
+    public bool DidCapture => CapturedAbsoluteTokenIndex >= 0;
 
-    public static MoveResult Create(byte pos, int captured = -1) =>
-        new() { NewPosition = pos, CapturedAbsToken = captured };
+    public static MoveResult Create(byte newPosition, int capturedAbsoluteTokenIndex = -1) =>
+        new() { NewPosition = newPosition, CapturedAbsoluteTokenIndex = capturedAbsoluteTokenIndex };
 }
 
 public readonly struct DiceRollResult
@@ -390,8 +390,8 @@ public readonly struct DiceRollResult
     public int TurnId { get; init; }
     public int Player { get; init; }
 
-    public static DiceRollResult Create(Dice dice, MovableTokens movable, bool forfeited, int turnId, int player) =>
-        new() { Dice = dice, Movable = movable, ForfeitedForTripleSix = forfeited, TurnId = turnId, Player = player };
+    public static DiceRollResult Create(Dice diceValue, MovableTokens movableTokens, bool forfeited, int turnId, int playerIndex) =>
+        new() { Dice = diceValue, Movable = movableTokens, ForfeitedForTripleSix = forfeited, TurnId = turnId, Player = playerIndex };
 }
 
 // ---------------------------
@@ -428,26 +428,26 @@ public sealed class LudoGame
     /// - Computes movable tokens and sets state.
     /// - If this is the third consecutive six, the turn is immediately forfeited (no move allowed) and we auto-advance to next player.
     /// </summary>
-    public bool TryRollDice(out DiceRollResult result, out GameError error)
+    public bool TryRollDice(out DiceRollResult diceRollResult, out GameError error)
     {
-        result = default;
+        diceRollResult = default;
         error = GameError.None;
 
         if (GameWon) { error = GameError.GameAlreadyWon; return false; }
         if (!_state.CanRollDice()) { error = GameError.NoTurnAvailable; return false; }
 
-        byte roll = (byte)_rng.Next(LudoUtil.MinDiceValue, LudoUtil.MaxDiceValue + 1);
-        if (!_board.TryGetMovableTokens(_state.CurrentPlayer, roll, out var mask, out error))
+        byte diceRoll = (byte)_rng.Next(LudoUtil.MinDiceValue, LudoUtil.MaxDiceValue + 1);
+        if (!_board.TryGetMovableTokens(_state.CurrentPlayer, diceRoll, out var movableTokensMask, out error))
             return false;
 
         // Tentatively record to update consecutive sixes.
-        _state.RecordDiceRoll(roll, mask);
+        _state.RecordDiceRoll(diceRoll, movableTokensMask);
 
         // --- Triple-six rule: forfeit immediately, no movement permitted ---
         if (_state.ConsecutiveSixes >= LudoUtil.MaxConsecutiveSixes) // i.e., == 3
         {
             // We expose the roll (clients can animate), but movement is disallowed.
-            result = DiceRollResult.Create(Dice.FromByte(roll), MovableTokens.None, forfeited: true, _state.TurnId, _state.CurrentPlayer);
+            diceRollResult = DiceRollResult.Create(Dice.FromByte(diceRoll), MovableTokens.None, forfeited: true, _state.TurnId, _state.CurrentPlayer);
 
             // Advance to next player right now and clear state.
             _state.AdvanceTurn();
@@ -455,15 +455,15 @@ public sealed class LudoGame
         }
 
         // If no moves, pass the turn automatically
-        if (mask == MovableTokens.None)
+        if (movableTokensMask == MovableTokens.None)
         {
-            result = DiceRollResult.Create(Dice.FromByte(roll), mask, forfeited: false, _state.TurnId, _state.CurrentPlayer);
+            diceRollResult = DiceRollResult.Create(Dice.FromByte(diceRoll), movableTokensMask, forfeited: false, _state.TurnId, _state.CurrentPlayer);
             _state.AdvanceTurn();
             return true;
         }
 
         // Normal case: moves available; client should now send MoveToken command
-        result = DiceRollResult.Create(Dice.FromByte(roll), mask, forfeited: false, _state.TurnId, _state.CurrentPlayer);
+        diceRollResult = DiceRollResult.Create(Dice.FromByte(diceRoll), movableTokensMask, forfeited: false, _state.TurnId, _state.CurrentPlayer);
         return true;
     }
 
@@ -471,9 +471,9 @@ public sealed class LudoGame
     /// SERVER: Move one of the current player's movable tokens (local index 0..3).
     /// - Applies capture, win detection, turn/extra-turn logic.
     /// </summary>
-    public bool TryMoveToken(int tokenLocalIndex, out MoveResult result, out GameError error)
+    public bool TryMoveToken(int tokenLocalIndex, out MoveResult moveResult, out GameError error)
     {
-        result = default; error = GameError.None;
+        moveResult = default; error = GameError.None;
 
         if (GameWon) { error = GameError.GameAlreadyWon; return false; }
         if (!_state.MustMove) { error = GameError.NoTurnAvailable; return false; }
@@ -481,12 +481,12 @@ public sealed class LudoGame
         if ((_state.MovableTokensMask & (MovableTokens)(1 << tokenLocalIndex)) == 0)
             { error = GameError.TokenNotMovable; return false; }
 
-        int abs = LudoUtil.GetPlayerTokenStart(_state.CurrentPlayer) + tokenLocalIndex;
+        int absoluteTokenIndex = LudoUtil.GetPlayerTokenStart(_state.CurrentPlayer) + tokenLocalIndex;
 
-        if (!_board.TryMoveToken(abs, _state.LastDiceRoll, out var newPos, out error))
+        if (!_board.TryMoveToken(absoluteTokenIndex, _state.LastDiceRoll, out var newPosition, out error))
             return false;
 
-        _board.TryCaptureOpponent(abs, out var capturedAbs);
+        _board.TryCaptureOpponent(absoluteTokenIndex, out var capturedAbsoluteTokenIndex);
 
         if (_board.TryHasPlayerWon(_state.CurrentPlayer, out var won, out _) && won)
         {
@@ -507,7 +507,7 @@ public sealed class LudoGame
             _state.AdvanceTurn();
         }
 
-        result = MoveResult.Create(newPos, capturedAbs);
+        moveResult = MoveResult.Create(newPosition, capturedAbsoluteTokenIndex);
         return true;
     }
 
@@ -530,22 +530,22 @@ public sealed class LudoGame
         };
 
     /// <summary>Rehydrate game from a snapshot (e.g., for client to mirror server state).</summary>
-    public static LudoGame FromSnapshot(GameSnapshot snap)
+    public static LudoGame FromSnapshot(GameSnapshot snapshot)
     {
-        var g = new LudoGame(snap.PlayerCount, seed: 0);
-        g._board.TokenPositions = (byte[])snap.Tokens.Clone();
+        var g = new LudoGame(snapshot.PlayerCount, seed: 0);
+        g._board.TokenPositions = (byte[])snapshot.Tokens.Clone();
         g._state = new LudoState
         {
-            PlayerCount = (byte)snap.PlayerCount,
-            CurrentPlayer = (byte)snap.CurrentPlayer,
-            ConsecutiveSixes = (byte)snap.ConsecutiveSixes,
-            LastDiceRoll = (byte)snap.LastDiceRoll,
-            MovableTokensMask = snap.MovableTokensMask,
-            TurnId = snap.TurnId,
-            Version = snap.Version
+            PlayerCount = (byte)snapshot.PlayerCount,
+            CurrentPlayer = (byte)snapshot.CurrentPlayer,
+            ConsecutiveSixes = (byte)snapshot.ConsecutiveSixes,
+            LastDiceRoll = (byte)snapshot.LastDiceRoll,
+            MovableTokensMask = snapshot.MovableTokensMask,
+            TurnId = snapshot.TurnId,
+            Version = snapshot.Version
         };
-        g.GameWon = snap.GameWon;
-        g.Winner = snap.Winner;
+        g.GameWon = snapshot.GameWon;
+        g.Winner = snapshot.Winner;
         return g;
     }
 
@@ -621,7 +621,7 @@ public sealed class TokenMovedEvent : IEvent
     public int TurnId { get; init; }
     public int TokenLocalIndex { get; init; }
     public byte NewPosition { get; init; }
-    public int CapturedAbsToken { get; init; } // -1 if none
+    public int CapturedAbsoluteTokenIndex { get; init; } // -1 if none
     public bool ExtraTurn { get; init; }
     public bool GameWon { get; init; }
     public int Winner { get; init; }
@@ -656,21 +656,21 @@ public static class ServerSide
             {
                 if (r.ExpectTurnId != game.TurnId)
                     yield return new ErrorEvent { Error = GameError.InvalidCommandForTurn, Message = "Turn ID mismatch.", Snapshot = game.GetSnapshot() };
-                else if (game.TryRollDice(out var dr, out var err))
+                else if (game.TryRollDice(out var diceRollResult, out var error))
                 {
                     yield return new DiceRolledEvent
                     {
-                        Player = dr.Player,
-                        TurnId = dr.TurnId,
-                        Dice = dr.Dice,
-                        Movable = dr.Movable,
-                        ForfeitedForTripleSix = dr.ForfeitedForTripleSix,
+                        Player = diceRollResult.Player,
+                        TurnId = diceRollResult.TurnId,
+                        Dice = diceRollResult.Dice,
+                        Movable = diceRollResult.Movable,
+                        ForfeitedForTripleSix = diceRollResult.ForfeitedForTripleSix,
                         Snapshot = game.GetSnapshot()
                     };
                 }
                 else
                 {
-                    yield return new ErrorEvent { Error = err, Message = err.ToString(), Snapshot = game.GetSnapshot() };
+                    yield return new ErrorEvent { Error = error, Message = error.ToString(), Snapshot = game.GetSnapshot() };
                 }
                 break;
             }
@@ -682,23 +682,23 @@ public static class ServerSide
                     yield break;
                 }
 
-                if (game.TryMoveToken(m.TokenLocalIndex, out var mv, out var err))
+                if (game.TryMoveToken(m.TokenLocalIndex, out var moveResult, out var error))
                 {
                     // Determine extra turn: if current player didn’t advance, TurnId won’t change.
                     // But we advanced on server; check by comparing snapshot TurnId vs provided ExpectTurnId.
-                    var snap = game.GetSnapshot();
-                    bool extraTurn = snap.TurnId == m.ExpectTurnId; // same turn -> still same player
+                    var snapshot = game.GetSnapshot();
+                    bool extraTurn = snapshot.TurnId == m.ExpectTurnId; // same turn -> still same player
                     yield return new TokenMovedEvent
                     {
-                        Player = snap.CurrentPlayer, // note: if extraTurn false, this is next player
-                        TurnId = snap.TurnId,
+                        Player = snapshot.CurrentPlayer, // note: if extraTurn false, this is next player
+                        TurnId = snapshot.TurnId,
                         TokenLocalIndex = m.TokenLocalIndex,
-                        NewPosition = mv.NewPosition,
-                        CapturedAbsToken = mv.CapturedAbsToken,
+                        NewPosition = moveResult.NewPosition,
+                        CapturedAbsoluteTokenIndex = moveResult.CapturedAbsoluteTokenIndex,
                         ExtraTurn = extraTurn,
-                        GameWon = snap.GameWon,
-                        Winner = snap.Winner,
-                        Snapshot = snap
+                        GameWon = snapshot.GameWon,
+                        Winner = snapshot.Winner,
+                        Snapshot = snapshot
                     };
 
                     // If turn actually advanced, emit a TurnAdvancedEvent as well (handy for UI).
@@ -706,16 +706,16 @@ public static class ServerSide
                     {
                         yield return new TurnAdvancedEvent
                         {
-                            PreviousPlayer = (snap.CurrentPlayer + snap.PlayerCount - 1) % snap.PlayerCount,
-                            NextPlayer = snap.CurrentPlayer,
-                            TurnId = snap.TurnId,
-                            Snapshot = snap
+                            PreviousPlayer = (snapshot.CurrentPlayer + snapshot.PlayerCount - 1) % snapshot.PlayerCount,
+                            NextPlayer = snapshot.CurrentPlayer,
+                            TurnId = snapshot.TurnId,
+                            Snapshot = snapshot
                         };
                     }
                 }
                 else
                 {
-                    yield return new ErrorEvent { Error = err, Message = err.ToString(), Snapshot = game.GetSnapshot() };
+                    yield return new ErrorEvent { Error = error, Message = error.ToString(), Snapshot = game.GetSnapshot() };
                 }
                 break;
             }
