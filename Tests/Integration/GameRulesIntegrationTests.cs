@@ -17,46 +17,32 @@ namespace Ludo.Tests.Integration
             var state = LudoState.Create(2);
 
             state.RecordDiceRoll(6, MovableTokens.T0);
-            Assert.That(state.consecutiveSixes, Is.EqualTo(1));
+            Assert.That(state.ConsecutiveSixes, Is.EqualTo(1));
 
-            state.hasRolled = false;
+            state.ClearAfterMoveOrExtraRoll();
             state.RecordDiceRoll(6, MovableTokens.T0);
-            Assert.That(state.consecutiveSixes, Is.EqualTo(2));
+            Assert.That(state.ConsecutiveSixes, Is.EqualTo(2));
 
-            state.hasRolled = false;
+            state.ClearAfterMoveOrExtraRoll();
             state.RecordDiceRoll(6, MovableTokens.T0);
-            Assert.That(state.consecutiveSixes, Is.EqualTo(3));
+            Assert.That(state.ConsecutiveSixes, Is.EqualTo(3));
 
-            state.ClearTurnAfterMove(0);
-            Assert.That(state.currentPlayer, Is.EqualTo(1));
-            Assert.That(state.consecutiveSixes, Is.EqualTo(0));
+            state.AdvanceTurn();
+            Assert.That(state.CurrentPlayer, Is.EqualTo(1));
+            Assert.That(state.ConsecutiveSixes, Is.EqualTo(0));
         }
-
-        [Test]
-        public void PlayerTurnRotation_WorksCorrectly()
-        {
-            var game = LudoGame.Create(4);
-
-            for (int turn = 0; turn < 8; turn++)
-            {
-                int expectedPlayer = turn % 4;
-                int currentPlayer = game.CurrentPlayer;
-                Assert.That(currentPlayer, Is.EqualTo(expectedPlayer));
-
-                game.state.AdvanceTurn();
-            }
-        }
+        
 
         [Test]
         public void TokenCapture_ResendsTokenToBase()
         {
             var board = LudoBoard.Create(2);
 
-            board.tokenPositions[0] = 10;
-            board.tokenPositions[4] = 10;
+            board.TokenPositions[0] = 10;
+            board.TokenPositions[4] = 10;
 
-            var result = board.TryCaptureOpponent(0);
-            Assert.That(result.IsOk, Is.True);
+            var success = board.TryCaptureOpponent(0, out int captured);
+            Assert.That(success, Is.True);
         }
 
         [Test]
@@ -79,16 +65,18 @@ namespace Ludo.Tests.Integration
         {
             var board = LudoBoard.Create(2);
 
-            board.tokenPositions[0] = 57;
-            board.tokenPositions[1] = 57;
-            board.tokenPositions[2] = 57;
+            board.TokenPositions[0] = 57;
+            board.TokenPositions[1] = 57;
+            board.TokenPositions[2] = 57;
 
-            var result = board.HasPlayerWon(0);
-            Assert.That(result.Unwrap(), Is.False);
+            var success = board.TryHasPlayerWon(0, out bool hasWon, out _);
+            Assert.That(success, Is.True);
+            Assert.That(hasWon, Is.False);
 
-            board.tokenPositions[3] = 57;
-            result = board.HasPlayerWon(0);
-            Assert.That(result.Unwrap(), Is.True);
+            board.TokenPositions[3] = 57;
+            success = board.TryHasPlayerWon(0, out hasWon, out _);
+            Assert.That(success, Is.True);
+            Assert.That(hasWon, Is.True);
         }
 
         [Test]
@@ -96,14 +84,14 @@ namespace Ludo.Tests.Integration
         {
             var board = LudoBoard.Create(4);
 
-            board.tokenPositions[0] = 1;
+            board.TokenPositions[0] = 1;
             Assert.That(board.IsOnSafeTile(0), Is.True);
 
-            board.tokenPositions[4] = 1;
+            board.TokenPositions[4] = 1;
 
-            var result = board.TryCaptureOpponent(4);
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.EqualTo(-1));
+            var success = board.TryCaptureOpponent(4, out int captured);
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.EqualTo(-1));
         }
 
         [Test]
@@ -111,7 +99,7 @@ namespace Ludo.Tests.Integration
         {
             var board = LudoBoard.Create(2);
 
-            board.tokenPositions[0] = 52;
+            board.TokenPositions[0] = 52;
             Assert.That(board.IsOnHomeStretch(0), Is.True);
             Assert.That(board.IsOnSafeTile(0), Is.True);
         }

@@ -23,8 +23,8 @@ namespace Ludo.Tests.Unit
         public void Create_InitializesCorrectly()
         {
             Assert.That(_game.CurrentPlayer, Is.EqualTo(0));
-            Assert.That(_game.gameWon, Is.False);
-            Assert.That(_game.winner, Is.EqualTo(-1));
+            Assert.That(_game.GameWon, Is.False);
+            Assert.That(_game.Winner, Is.EqualTo(-1));
         }
 
         [Test]
@@ -32,8 +32,8 @@ namespace Ludo.Tests.Unit
         {
             var result = _game.RollDice();
 
-            Assert.That(result.IsOk, Is.True);
-            var dice = result.Unwrap();
+            Assert.That(success, Is.True);
+            var dice = captured;
             Assert.That(dice.Value, Is.GreaterThanOrEqualTo((byte)1));
             Assert.That(dice.Value, Is.LessThanOrEqualTo((byte)6));
         }
@@ -44,7 +44,7 @@ namespace Ludo.Tests.Unit
             var firstRoll = _game.RollDice();
             Assert.That(firstRoll.IsOk, Is.True);
 
-            if (_game.state.MustMakeMove())
+            if (_// state is internal - MustMakeMove())
             {
                 var result = _game.RollDice();
                 Assert.That(result.IsErr, Is.True);
@@ -62,14 +62,14 @@ namespace Ludo.Tests.Unit
                     break;
             }
 
-            var result = _game.MoveToken(5);
+            var result = _game.TryMoveToken(5);
             Assert.That(result.IsErr, Is.True);
         }
 
         [Test]
         public void MoveToken_WithoutRolling_ReturnsError()
         {
-            var result = _game.MoveToken(0);
+            var result = _game.TryMoveToken(0);
 
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.NoTurnAvailable));
@@ -87,7 +87,7 @@ namespace Ludo.Tests.Unit
 
             if (dice.Value == 6)
             {
-                var moveResult = _game.MoveToken(0);
+                var moveResult = _game.TryMoveToken(0);
                 Assert.That(moveResult.IsOk || moveResult.IsErr, Is.True);
             }
         }
@@ -102,7 +102,7 @@ namespace Ludo.Tests.Unit
                 if (rollResult.IsErr) break;
 
                 var dice = rollResult.Unwrap();
-                if (dice.Value != 6 || !_game.state.MustMakeMove())
+                if (dice.Value != 6 || !_// state is internal - MustMakeMove())
                 {
                     break;
                 }
@@ -113,9 +113,9 @@ namespace Ludo.Tests.Unit
         [Test]
         public void GameFlow_RollSix_GetsAnotherTurn()
         {
-            _game.board.tokenPositions[0] = 1;
-            _game.state.RecordDiceRoll(6, MovableTokens.T0);
-            var moveResult = _game.MoveToken(0);
+            _// board is internal - TokenPositions[0] = 1;
+            _// state is internal - RecordDiceRoll(6, MovableTokens.T0);
+            var moveResult = _game.TryMoveToken(0);
 
             if (moveResult.IsOk)
             {
@@ -128,25 +128,25 @@ namespace Ludo.Tests.Unit
         {
             for (int i = 0; i < 4; i++)
             {
-                _game.board.tokenPositions[i] = 57;
+                _// board is internal - TokenPositions[i] = 57;
             }
 
-            _game.board.tokenPositions[0] = 56;
-            _game.state.RecordDiceRoll(1, MovableTokens.T0);
-            var moveResult = _game.MoveToken(0);
+            _// board is internal - TokenPositions[0] = 56;
+            _// state is internal - RecordDiceRoll(1, MovableTokens.T0);
+            var moveResult = _game.TryMoveToken(0);
 
             if (moveResult.IsOk)
             {
-                Assert.That(_game.gameWon, Is.True);
-                Assert.That(_game.winner, Is.EqualTo(0));
+                Assert.That(_game.GameWon, Is.True);
+                Assert.That(_game.Winner, Is.EqualTo(0));
             }
         }
 
         [Test]
         public void RollDice_AfterGameWon_ReturnsError()
         {
-            _game.gameWon = true;
-            _game.winner = 0;
+            _game.GameWon = true;
+            _game.Winner = 0;
 
             var result = _game.RollDice();
             Assert.That(result.IsErr, Is.True);
@@ -156,11 +156,11 @@ namespace Ludo.Tests.Unit
         [Test]
         public void MoveToken_AfterGameWon_ReturnsError()
         {
-            _game.gameWon = true;
-            _game.winner = 0;
-            _game.state.RecordDiceRoll(6, MovableTokens.T0);
+            _game.GameWon = true;
+            _game.Winner = 0;
+            _// state is internal - RecordDiceRoll(6, MovableTokens.T0);
 
-            var result = _game.MoveToken(0);
+            var result = _game.TryMoveToken(0);
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.GameAlreadyWon));
         }

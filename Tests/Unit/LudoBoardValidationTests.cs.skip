@@ -23,7 +23,7 @@ namespace Ludo.Tests.Unit
         [Test]
         public void MoveToken_InvalidTokenIndex_ReturnsError()
         {
-            var result = _board.MoveToken(20, 6);
+            var result = _board.TryMoveToken(20, 6, out _, out _, out _, out _, out _, out _);
 
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.InvalidTokenIndex));
@@ -32,7 +32,7 @@ namespace Ludo.Tests.Unit
         [Test]
         public void MoveToken_InvalidDiceRoll_ReturnsError()
         {
-            var result = _board.MoveToken(0, 7);
+            var result = _board.TryMoveToken(0, 7, out _, out _, out _, out _, out _, out _);
 
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.InvalidDiceRoll));
@@ -41,8 +41,8 @@ namespace Ludo.Tests.Unit
         [Test]
         public void MoveToken_AlreadyHome_ReturnsError()
         {
-            _board.tokenPositions[0] = 57;
-            var result = _board.MoveToken(0, 3);
+            _board.TokenPositions[0] = 57;
+            var result = _board.TryMoveToken(0, 3, out _, out _, out _, out _, out _, out _);
 
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.TokenAlreadyHome));
@@ -51,8 +51,8 @@ namespace Ludo.Tests.Unit
         [Test]
         public void MoveToken_WouldOvershootHome_ReturnsError()
         {
-            _board.tokenPositions[0] = 55;
-            var result = _board.MoveToken(0, 6);
+            _board.TokenPositions[0] = 55;
+            var result = _board.TryMoveToken(0, 6, out _, out _, out _, out _, out _, out _);
 
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.WouldOvershootHome));
@@ -61,7 +61,7 @@ namespace Ludo.Tests.Unit
         [Test]
         public void GetMovableTokens_InvalidPlayerIndex_ReturnsError()
         {
-            var result = _board.GetMovableTokens(5, 6);
+            var result = _board.TryGetMovableTokens(5, 6);
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.InvalidPlayerIndex));
         }
@@ -69,7 +69,7 @@ namespace Ludo.Tests.Unit
         [Test]
         public void GetMovableTokens_InvalidDiceRoll_ReturnsError()
         {
-            var result = _board.GetMovableTokens(0, 7);
+            var result = _board.TryGetMovableTokens(0, 7);
             Assert.That(result.IsErr, Is.True);
             Assert.That(result.UnwrapErr(), Is.EqualTo(GameError.InvalidDiceRoll));
         }

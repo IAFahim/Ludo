@@ -5,4 +5,7 @@
 &lt;/SessionState&gt;</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=20a03d30_002De1da_002D4850_002Da0b1_002Dfe18416b8971/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from Tests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;ProjectFolder&gt;10D9BE96-3147-4304-A959-CDDE7BBA3E80/d:Tests&lt;/ProjectFolder&gt;
+&lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=e84ba92e_002D4658_002D4faf_002Daa05_002D08e3fe1d6409/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="All tests from Tests" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;ProjectFolder&gt;10D9BE96-3147-4304-A959-CDDE7BBA3E80/d:Tests&lt;/ProjectFolder&gt;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

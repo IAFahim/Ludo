@@ -17,7 +17,7 @@ namespace Ludo.Tests.Helpers
 
             for (int i = 0; i < TestConstants.TokensPerPlayer; i++)
             {
-                board.tokenPositions[tokenStart + i] = TestConstants.HomePosition;
+                board.TokenPositions[tokenStart + i] = TestConstants.HomePosition;
             }
 
             return board;
@@ -32,9 +32,9 @@ namespace Ludo.Tests.Helpers
 
             foreach (var (tokenIndex, position) in tokens)
             {
-                if (tokenIndex >= 0 && tokenIndex < board.tokenPositions.Length)
+                if (tokenIndex >= 0 && tokenIndex < board.TokenPositions.Length)
                 {
-                    board.tokenPositions[tokenIndex] = position;
+                    board.TokenPositions[tokenIndex] = position;
                 }
             }
 
@@ -46,7 +46,7 @@ namespace Ludo.Tests.Helpers
         /// </summary>
         public static void MoveTokenOutOfBase(LudoBoard board, int tokenIndex)
         {
-            board.MoveToken(tokenIndex, TestConstants.ExitDiceValue);
+            board.TryMoveToken(tokenIndex, TestConstants.ExitDiceValue, out _, out _);
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace Ludo.Tests.Helpers
         public static LudoState CreateStateWithCurrentPlayer(int playerIndex, int playerCount = 4)
         {
             var state = LudoState.Create((byte)playerCount);
-            while (state.currentPlayer != playerIndex)
+            while (state.CurrentPlayer != playerIndex)
             {
                 state.AdvanceTurn();
             }

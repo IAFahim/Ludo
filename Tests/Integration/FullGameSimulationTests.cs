@@ -18,33 +18,28 @@ namespace Ludo.Tests.Integration
             int maxTurns = 1000;
             int turnCount = 0;
 
-            while (!game.gameWon && turnCount < maxTurns)
+            while (!game.GameWon && turnCount < maxTurns)
             {
-                var rollResult = game.RollDice();
-                if (rollResult.IsErr) break;
-
-                var dice = rollResult.Unwrap();
-
-                if (game.state.MustMakeMove())
+                if (game.TryRollDice(out var diceResult, out var error))
                 {
-                    bool moved = false;
-                    for (int i = 0; i < 4; i++)
+                    // If there are movable tokens and not forfeited, try to move
+                    if (diceResult.Movable != MovableTokens.None && !diceResult.ForfeitedForTripleSix)
                     {
-                        if (game.state.IsTokenMovable(i))
+                        bool moved = false;
+                        for (int i = 0; i < 4; i++)
                         {
-                            var moveResult = game.MoveToken(i);
-                            if (moveResult.IsOk)
+                            // Check if this token is movable
+                            if ((diceResult.Movable & (MovableTokens)(1 << i)) != 0)
                             {
-                                moved = true;
-                                break;
+                                if (game.TryMoveToken(i, out _, out _))
+                                {
+                                    moved = true;
+                                    break;
+                                }
                             }
                         }
                     }
-
-                    if (!moved)
-                    {
-                        game.state.AdvanceTurn();
-                    }
+                    // else: no movable tokens or triple six - turn advances automatically
                 }
 
                 turnCount++;
@@ -58,9 +53,9 @@ namespace Ludo.Tests.Integration
         {
             var board = LudoBoard.Create(4);
 
-            board.MoveToken(0, 6);
-            board.MoveToken(1, 6);
-            board.MoveToken(2, 6);
+            board.TryMoveToken(0, 6, out _, out _);
+            board.TryMoveToken(1, 6, out _, out _);
+            board.TryMoveToken(2, 6, out _, out _);
 
             Assert.That(board.GetTokenPosition(0), Is.EqualTo(1));
             Assert.That(board.GetTokenPosition(1), Is.EqualTo(1));

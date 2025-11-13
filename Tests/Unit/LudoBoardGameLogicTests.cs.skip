@@ -23,31 +23,31 @@ namespace Ludo.Tests.Unit
         [Test]
         public void GetMovableTokens_WithNoMovableTokens_ReturnsZeroMask()
         {
-            var result = _board.GetMovableTokens(0, 3);
+            var result = _board.TryGetMovableTokens(0, 3);
 
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.EqualTo(MovableTokens.None));
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.EqualTo(MovableTokens.None));
         }
 
         [Test]
         public void GetMovableTokens_WithMovableTokens_ReturnsCorrectMask()
         {
-            var result = _board.GetMovableTokens(0, 6);
+            var result = _board.TryGetMovableTokens(0, 6);
 
-            Assert.That(result.IsOk, Is.True);
-            var mask = result.Unwrap();
+            Assert.That(success, Is.True);
+            var mask = captured;
             Assert.That(mask, Is.EqualTo(MovableTokens.T0 | MovableTokens.T1 | MovableTokens.T2 | MovableTokens.T3));
         }
 
         [Test]
         public void GetMovableTokens_SomeTokensMovable_ReturnsPartialMask()
         {
-            _board.tokenPositions[0] = 1;
-            _board.tokenPositions[1] = 1;
+            _board.TokenPositions[0] = 1;
+            _board.TokenPositions[1] = 1;
 
-            var result = _board.GetMovableTokens(0, 3);
-            Assert.That(result.IsOk, Is.True);
-            var mask = result.Unwrap();
+            var result = _board.TryGetMovableTokens(0, 3);
+            Assert.That(success, Is.True);
+            var mask = captured;
             Assert.That(mask.HasFlag(MovableTokens.T0), Is.True);
             Assert.That(mask.HasFlag(MovableTokens.T1), Is.True);
         }
@@ -57,26 +57,26 @@ namespace Ludo.Tests.Unit
         {
             for (int i = 0; i < 4; i++)
             {
-                _board.tokenPositions[i] = 57;
+                _board.TokenPositions[i] = 57;
             }
 
             var result = _board.HasPlayerWon(0);
 
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.True);
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.True);
         }
 
         [Test]
         public void HasPlayerWon_WithNotAllTokensHome_ReturnsFalse()
         {
-            _board.tokenPositions[0] = 57;
-            _board.tokenPositions[1] = 57;
-            _board.tokenPositions[2] = 57;
+            _board.TokenPositions[0] = 57;
+            _board.TokenPositions[1] = 57;
+            _board.TokenPositions[2] = 57;
 
             var result = _board.HasPlayerWon(0);
 
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.False);
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.False);
         }
     }
 }

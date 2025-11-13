@@ -23,37 +23,37 @@ namespace Ludo.Tests.Unit
         [Test]
         public void TryCaptureOpponent_OnSameTile_CapturesOpponent()
         {
-            _board.tokenPositions[0] = 10;
-            _board.tokenPositions[4] = 23;
-            _board.tokenPositions[4] = 10;
+            _board.TokenPositions[0] = 10;
+            _board.TokenPositions[4] = 23;
 
-            var result = _board.TryCaptureOpponent(4);
-            Assert.That(result.IsOk, Is.True);
+            var success = _board.TryCaptureOpponent(4, out int captured);
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.EqualTo(0));
         }
 
         [Test]
         public void TryCaptureOpponent_OnSafeTile_NoCapture()
         {
-            _board.tokenPositions[0] = 1;
-            _board.tokenPositions[4] = 14;
+            _board.TokenPositions[0] = 1;
+            _board.TokenPositions[4] = 14;
 
-            _board.MoveToken(4, 1);
-            var result = _board.TryCaptureOpponent(4);
+            _board.TryMoveToken(4, 1, out _, out _);
+            var success = _board.TryCaptureOpponent(4, out int captured);
 
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.EqualTo(-1));
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.EqualTo(-1));
         }
 
         [Test]
         public void TryCaptureOpponent_MultipleOpponentsOnSameTile_NoCapture()
         {
-            _board.tokenPositions[0] = 10;
-            _board.tokenPositions[4] = 10;
-            _board.tokenPositions[8] = 10;
+            _board.TokenPositions[0] = 10;
+            _board.TokenPositions[4] = 10;
+            _board.TokenPositions[8] = 10;
 
-            var result = _board.TryCaptureOpponent(0);
-            Assert.That(result.IsOk, Is.True);
-            Assert.That(result.Unwrap(), Is.EqualTo(-1));
+            var success = _board.TryCaptureOpponent(0, out int captured);
+            Assert.That(success, Is.True);
+            Assert.That(captured, Is.EqualTo(-1));
         }
     }
 }

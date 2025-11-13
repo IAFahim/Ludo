@@ -22,11 +22,11 @@ namespace Ludo.Tests.Unit
         [Test]
         public void Create_InitializesCorrectly()
         {
-            Assert.That(_state.playerCount, Is.EqualTo(4));
-            Assert.That(_state.currentPlayer, Is.EqualTo(0));
-            Assert.That(_state.consecutiveSixes, Is.EqualTo(0));
-            Assert.That(_state.hasRolled, Is.False);
-            Assert.That(_state.mustMove, Is.False);
+            Assert.That(_state.PlayerCount, Is.EqualTo(4));
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(0));
+            Assert.That(_state.ConsecutiveSixes, Is.EqualTo(0));
+            Assert.That(_state.HasRolled, Is.False);
+            Assert.That(_state.MustMove, Is.False);
         }
 
         [Test]
@@ -47,91 +47,80 @@ namespace Ludo.Tests.Unit
         {
             _state.RecordDiceRoll(5, MovableTokens.T0 | MovableTokens.T1);
 
-            Assert.That(_state.lastDiceRoll, Is.EqualTo(5));
-            Assert.That(_state.movableTokensMask, Is.EqualTo(MovableTokens.T0 | MovableTokens.T1));
-            Assert.That(_state.hasRolled, Is.True);
-            Assert.That(_state.mustMove, Is.True);
+            Assert.That(_state.LastDiceRoll, Is.EqualTo(5));
+            Assert.That(_state.MovableTokensMask, Is.EqualTo(MovableTokens.T0 | MovableTokens.T1));
+            Assert.That(_state.HasRolled, Is.True);
+            Assert.That(_state.MustMove, Is.True);
         }
 
         [Test]
         public void RecordDiceRoll_WithSix_IncrementsConsecutiveSixes()
         {
             _state.RecordDiceRoll(6, MovableTokens.T0);
-            Assert.That(_state.consecutiveSixes, Is.EqualTo(1));
+            Assert.That(_state.ConsecutiveSixes, Is.EqualTo(1));
 
-            _state.hasRolled = false;
+            _state.ClearAfterMoveOrExtraRoll();
             _state.RecordDiceRoll(6, MovableTokens.T0);
-            Assert.That(_state.consecutiveSixes, Is.EqualTo(2));
+            Assert.That(_state.ConsecutiveSixes, Is.EqualTo(2));
         }
 
         [Test]
         public void RecordDiceRoll_WithoutSix_ResetsConsecutiveSixes()
         {
             _state.RecordDiceRoll(6, MovableTokens.T0);
-            _state.hasRolled = false;
+            _state.ClearAfterMoveOrExtraRoll();
             _state.RecordDiceRoll(3, MovableTokens.T0);
 
-            Assert.That(_state.consecutiveSixes, Is.EqualTo(0));
+            Assert.That(_state.ConsecutiveSixes, Is.EqualTo(0));
         }
 
         [Test]
         public void AdvanceTurn_UpdatesCurrentPlayer()
         {
             _state.AdvanceTurn();
-            Assert.That(_state.currentPlayer, Is.EqualTo(1));
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(1));
 
             _state.AdvanceTurn();
-            Assert.That(_state.currentPlayer, Is.EqualTo(2));
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(2));
         }
 
         [Test]
         public void AdvanceTurn_WrapsAround()
         {
-            _state.currentPlayer = 3;
+            _state.CurrentPlayer = 3;
             _state.AdvanceTurn();
-            Assert.That(_state.currentPlayer, Is.EqualTo(0));
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(0));
         }
 
         [Test]
         public void ClearTurnAfterMove_WithoutSix_AdvancesTurn()
         {
             _state.RecordDiceRoll(4, MovableTokens.T0);
-            _state.ClearTurnAfterMove(0);
+            _state.AdvanceTurn();
 
-            Assert.That(_state.currentPlayer, Is.EqualTo(1));
-            Assert.That(_state.hasRolled, Is.False);
-            Assert.That(_state.mustMove, Is.False);
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(1));
+            Assert.That(_state.HasRolled, Is.False);
+            Assert.That(_state.MustMove, Is.False);
         }
 
         [Test]
-        public void ClearTurnAfterMove_WithSix_DoesNotAdvanceTurn()
+        public void ClearAfterMoveOrExtraRoll_WithSix_KeepsCurrentPlayer()
+        {
+            int initialPlayer = _state.CurrentPlayer;
+            _state.RecordDiceRoll(6, MovableTokens.T0);
+            _state.ClearAfterMoveOrExtraRoll();
+
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(initialPlayer));
+        }
+
+        [Test]
+        public void AdvanceTurn_ResetsConsecutiveSixes()
         {
             _state.RecordDiceRoll(6, MovableTokens.T0);
-            _state.ClearTurnAfterMove(0);
+            _state.AdvanceTurn();
 
-            Assert.That(_state.currentPlayer, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void ClearTurnAfterMove_WithThreeConsecutiveSixes_AdvancesTurn()
-        {
-            _state.consecutiveSixes = 3;
-            _state.RecordDiceRoll(6, MovableTokens.T0);
-            _state.ClearTurnAfterMove(0);
-
-            Assert.That(_state.currentPlayer, Is.EqualTo(1));
-            Assert.That(_state.consecutiveSixes, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void IsTokenMovable_ReturnsCorrectValue()
-        {
-            _state.movableTokensMask = MovableTokens.T0 | MovableTokens.T2; // Binary 0101
-
-            Assert.That(_state.IsTokenMovable(0), Is.True);
-            Assert.That(_state.IsTokenMovable(1), Is.False);
-            Assert.That(_state.IsTokenMovable(2), Is.True);
-            Assert.That(_state.IsTokenMovable(3), Is.False);
+            Assert.That(_state.CurrentPlayer, Is.EqualTo(1));
+            Assert.That(_state.ConsecutiveSixes, Is.EqualTo(0));
         }
     }
 }

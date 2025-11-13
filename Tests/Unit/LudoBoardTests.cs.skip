@@ -72,7 +72,7 @@ namespace Ludo.Tests.Unit
         [Test]
         public void GetTokenPosition_WithValidIndex_ReturnsPosition()
         {
-            _board.tokenPositions[5] = 25;
+            _board.TokenPositions[5] = 25;
             Assert.That(_board.GetTokenPosition(5), Is.EqualTo(25));
         }
 
