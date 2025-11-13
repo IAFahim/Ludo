@@ -23,12 +23,12 @@ namespace Ludo.Tests.Unit
         [Test]
         public void TryCaptureOpponent_OnSameTile_CapturesOpponent()
         {
-            _board.TokenPositions[0] = 10;
+            _board.TokenPositions[0] = 36;
             _board.TokenPositions[4] = 23;
 
-            var success = _board.TryCaptureOpponent(4, out int captured);
+            var success = _board.TryCaptureOpponent(0, out var captured);
             Assert.That(success, Is.True);
-            Assert.That(captured, Is.EqualTo(0));
+            Assert.That(captured, Is.EqualTo(4));
         }
 
         [Test]
