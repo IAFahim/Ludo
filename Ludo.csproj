@@ -9,6 +9,11 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <!-- Example apps have their own entry points and project files; keep them out of this project -->
+      <Compile Remove="RestExample/**;SignalRExample/**;WebSocketExample/**" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
       <PackageReference Include="NUnit" Version="4.4.0" />
       <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
